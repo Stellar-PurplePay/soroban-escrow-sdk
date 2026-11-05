@@ -341,8 +341,8 @@ fn test_milestone_validation_enforced() {
     let env = Env::default();
     env.mock_all_auths();
     let (
-        admin,
-        treasury,
+        _admin,
+        _treasury,
         client,
         freelancer,
         arbitrator,

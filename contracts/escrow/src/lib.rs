@@ -140,12 +140,9 @@ impl EscrowContract {
         }
 
         // Transfer funds from client to contract custody
+        let contract_address = env.current_contract_address();
         let token_client = token::Client::new(&env, &params.token);
-        token_client.transfer(
-            &client,
-            &env.current_contract_address(),
-            &params.total_amount,
-        );
+        token_client.transfer(&client, &contract_address, &params.total_amount);
 
         let escrow = Escrow {
             job_id: job_id.clone(),

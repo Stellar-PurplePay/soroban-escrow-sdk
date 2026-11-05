@@ -6,7 +6,7 @@ description = "Non-custodial milestone escrow smart contract for Stellar Soroban
 license = "MIT"
 
 [lib]
-crate-type = ["rlib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 soroban-sdk = "27.0.6"

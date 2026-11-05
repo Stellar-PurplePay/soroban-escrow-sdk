@@ -15,6 +15,18 @@
 
 ---
 
+## 🌐 Deployed Smart Contract (Stellar Testnet)
+
+| Component | Target / Environment | Live URL / Explorer Link |
+| :--- | :--- | :--- |
+| **Soroban Smart Contract** | Stellar Testnet | [`CA5DEQZ64FKZL7KVWOEKXWJVZJXP4JKEQUAO7GFNYZYQRKI6N5CWEDU3`](https://stellar.expert/explorer/testnet/contract/CA5DEQZ64FKZL7KVWOEKXWJVZJXP4JKEQUAO7GFNYZYQRKI6N5CWEDU3) |
+| **Stellar Lab Contract** | Stellar Testnet | [View in Stellar Lab](https://lab.stellar.org/r/testnet/contract/CA5DEQZ64FKZL7KVWOEKXWJVZJXP4JKEQUAO7GFNYZYQRKI6N5CWEDU3) |
+| **Deploy Transaction** | Stellar Testnet | [`de6c87db7102...`](https://stellar.expert/explorer/testnet/tx/de6c87db71027b429999719f6e0521c84fc8101c8b51e866d1f4c86acc60fff9) |
+| **Init Transaction** | Stellar Testnet | [`0b563fe9acf5...`](https://stellar.expert/explorer/testnet/tx/0b563fe9acf5e6cf068190f777f725ddd236efda34dc4369b64b14c4372c57b3) |
+| **Admin / Treasury Key** | Stellar Testnet | `GBWFZHBYEKF5MR2MHW7JAZX6ZRI2PKKBL6IALEMJSBMU4JMDSIB34KP5` |
+| **Platform Fee** | Basis Points | `100 bps` (1.00%) |
+
+
 ## 🌟 Key Features
 
 - 🔒 **Non-Custodial Escrow**: Funds are locked strictly inside the Soroban contract until explicit milestone release, mutual resolution, or permissionless timeout.
@@ -128,7 +140,7 @@ import { EscrowClient, toAtomicUnits } from "@stellar-purplepay/escrow-sdk";
 const client = new EscrowClient({
   rpcUrl: "https://soroban-testnet.stellar.org",
   networkPassphrase: "Test SDF Network ; September 2015",
-  contractId: "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+  contractId: "CA5DEQZ64FKZL7KVWOEKXWJVZJXP4JKEQUAO7GFNYZYQRKI6N5CWEDU3",
 });
 
 // 1. Prepare escrow with pro-rata milestones

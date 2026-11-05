@@ -1,40 +1,48 @@
 # 🛡️ Soroban Escrow SDK
 
-> **Type-safe TypeScript SDK and audit-grade Soroban smart contract for non-custodial milestone escrow, automated timeouts, and multi-token settlements on Stellar.**
+> **Production-grade Soroban smart contract and type-safe TypeScript SDK for non-custodial milestone escrow, automated timeouts, and multi-token settlements on the Stellar network.**
 >
-> *Built for developers, marketplaces, and freelance platforms building trustless commerce on Stellar.*
+> *Engineered for marketplaces, freelance platforms, and decentralized applications building trustless commerce on Stellar.*
 
 ---
 
 [![CI](https://github.com/Stellar-PurplePay/soroban-escrow-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/Stellar-PurplePay/soroban-escrow-sdk/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Stellar Network](https://img.shields.io/badge/Stellar-Soroban-08B5E5.svg?logo=stellar)](https://stellar.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6.svg?logo=typescript)](https://www.typescriptlang.org)
-[![Rust](https://img.shields.io/badge/Rust-1.74%2B-DEA584.svg?logo=rust)](https://www.rust-lang.org)
+[![Version: 0.2.0](https://img.shields.io/badge/version-0.2.0-blue.svg)](packages/sdk/package.json)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Stellar Soroban](https://img.shields.io/badge/Stellar-Soroban%20v27-08B5E5.svg?logo=stellar)](https://stellar.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8%2B-3178C6.svg?logo=typescript)](https://www.typescriptlang.org)
+[![Rust](https://img.shields.io/badge/Rust-2021%20Edition-DEA584.svg?logo=rust)](https://www.rust-lang.org)
+[![Security Policy](https://img.shields.io/badge/Security-Policy-blue.svg)](SECURITY.md)
+[![Code of Conduct](https://img.shields.io/badge/Contributor-Covenant-green.svg)](CODE_OF_CONDUCT.md)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 ---
 
-## 🌐 Deployed Smart Contract (Stellar Testnet)
+## 🌐 Live Deployed Contract (Stellar Testnet)
 
-| Component | Target / Environment | Live URL / Explorer Link |
+| Parameter | Value / Network Details | Verification Link |
 | :--- | :--- | :--- |
-| **Soroban Smart Contract** | Stellar Testnet | [`CA5DEQZ64FKZL7KVWOEKXWJVZJXP4JKEQUAO7GFNYZYQRKI6N5CWEDU3`](https://stellar.expert/explorer/testnet/contract/CA5DEQZ64FKZL7KVWOEKXWJVZJXP4JKEQUAO7GFNYZYQRKI6N5CWEDU3) |
-| **Stellar Lab Contract** | Stellar Testnet | [View in Stellar Lab](https://lab.stellar.org/r/testnet/contract/CA5DEQZ64FKZL7KVWOEKXWJVZJXP4JKEQUAO7GFNYZYQRKI6N5CWEDU3) |
-| **Deploy Transaction** | Stellar Testnet | [`de6c87db7102...`](https://stellar.expert/explorer/testnet/tx/de6c87db71027b429999719f6e0521c84fc8101c8b51e866d1f4c86acc60fff9) |
-| **Init Transaction** | Stellar Testnet | [`0b563fe9acf5...`](https://stellar.expert/explorer/testnet/tx/0b563fe9acf5e6cf068190f777f725ddd236efda34dc4369b64b14c4372c57b3) |
-| **Admin / Treasury Key** | Stellar Testnet | `GBWFZHBYEKF5MR2MHW7JAZX6ZRI2PKKBL6IALEMJSBMU4JMDSIB34KP5` |
-| **Platform Fee** | Basis Points | `100 bps` (1.00%) |
+| **Contract ID** | `CA5DEQZ64FKZL7KVWOEKXWJVZJXP4JKEQUAO7GFNYZYQRKI6N5CWEDU3` | [Stellar Expert Explorer](https://stellar.expert/explorer/testnet/contract/CA5DEQZ64FKZL7KVWOEKXWJVZJXP4JKEQUAO7GFNYZYQRKI6N5CWEDU3) |
+| **Interactive Console** | Stellar Lab Explorer | [Testnet Stellar Lab](https://lab.stellar.org/r/testnet/contract/CA5DEQZ64FKZL7KVWOEKXWJVZJXP4JKEQUAO7GFNYZYQRKI6N5CWEDU3) |
+| **Deploy Transaction** | `de6c87db71027b42...` | [View Deploy Tx](https://stellar.expert/explorer/testnet/tx/de6c87db71027b429999719f6e0521c84fc8101c8b51e866d1f4c86acc60fff9) |
+| **Init Transaction** | `0b563fe9acf5e6cf...` | [View Init Tx](https://stellar.expert/explorer/testnet/tx/0b563fe9acf5e6cf068190f777f725ddd236efda34dc4369b64b14c4372c57b3) |
+| **Treasury / Admin Key** | `GBWFZHBYEKF5MR2MHW7JAZX6ZRI2PKKBL6IALEMJSBMU4JMDSIB34KP5` | Stellar Account |
+| **Network Passphrase** | `Test SDF Network ; September 2015` | Testnet |
+| **RPC Endpoint** | `https://soroban-testnet.stellar.org` | SDF Public Node |
 
+---
 
-## 🌟 Key Features
+## 🌟 Key Capabilities & Security Guarantees
 
-- 🔒 **Non-Custodial Escrow**: Funds are locked strictly inside the Soroban contract until explicit milestone release, mutual resolution, or permissionless timeout.
-- 🎯 **Pro-Rata Milestone Payouts**: Define percentage-based milestones (e.g. 30% / 30% / 40%). Approving a milestone transfers the exact allocated portion while keeping the rest safely locked.
-- ⏱️ **Permissionless Timeout Refunds**: If work is never commenced or deliverable milestones lapse past the predetermined deadline, anyone can invoke the timeout trigger to refund remaining funds directly back to the client.
-- 🪙 **Multi-Token Support (SEP-41)**: Natively compatible with Stellar Lumens (XLM), fiat-backed stablecoins (USDC), and any SEP-41 compliant asset.
-- ⚖️ **Dispute Arbitration Hook**: Designate a trusted arbitrator address (or DAO contract) with authorization to resolve disputes and allocate funds.
-- 📦 **End-to-End TypeScript SDK**: Type-safe client library handling argument encoding, parameter validation, deliverable hash verification, and atomic conversions.
+- 🔒 **100% Non-Custodial Escrow**: Funds are locked inside the Soroban contract balance. Neither the platform admin nor any third party can unilaterally seize funds.
+- 🎯 **Pro-Rata Milestone Payouts**: Define granular milestone percentages (e.g. 25% / 25% / 50%). Approving a milestone releases that portion while keeping remaining milestones safely escrowed.
+- 🧮 **Dust-Free Token Math**: Integer stroop division calculates exact allocations, automatically assigning rounding remainders to the final milestone so zero tokens remain trapped in custody.
+- 🛡️ **On-Chain Fee Protection (PP-11)**: Hard on-chain ceiling constant `MAX_FEE_BPS = 1_000` (10.00% maximum platform fee). Any attempt to exceed 10% reverts with `EscrowError::InvalidFee`.
+- 🛑 **Milestone Bounds & DoS Resistance (PP-14)**: Milestones are capped at a maximum of 25 items (`MAX_MILESTONES = 25`), descriptions are bounded to 256 bytes, and percentages are checked for arithmetic overflow.
+- 📐 **Zero-Loss Precision (PP-12)**: TypeScript SDK utility `toAtomicUnits` validates fractional digits against the token's decimal precision, strictly rejecting excess decimal precision, negative numbers, and scientific notation.
+- 🔑 **Cryptographic StrKey Validation (PP-13)**: Address inputs are checked via `@stellar/stellar-sdk`'s `StrKey` validators, ensuring base32 validity and CRC16-XModem checksum integrity.
+- ⏱️ **Permissionless Timeout Refunds**: If a milestone expires past its deadline, the client can reclaim unreleased funds directly from the contract.
+- ⚖️ **Tripartite Dispute Arbitration**: Counterparties can escalate disputes to a designated arbitrator with on-chain authority to split funds.
 
 ---
 
@@ -43,32 +51,134 @@
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Client
-    actor Freelancer
-    participant Contract as Soroban Escrow Contract
-    actor Arbitrator
+    actor Client as 👤 Client
+    participant SDK as 📦 Escrow SDK
+    participant Contract as 🛡️ Soroban Escrow Contract
+    actor Freelancer as 💻 Freelancer
+    actor Arbitrator as ⚖️ Arbitrator
 
-    Client->>Contract: create_escrow(job_id, token, amount, milestones, timeout)
-    Note over Contract: Funds locked in contract custody
+    Note over Client,Freelancer: 1. Setup & Funding
+    Client->>SDK: prepareCreateEscrow(jobId, token, amount, milestones, timeout)
+    SDK-->>Client: Serialized Invocation Payload
+    Client->>Contract: create_escrow() [Transfers funds to contract]
+    Note over Contract: Status: Created (Funds Locked in Custody)
 
-    Freelancer->>Contract: start_work(job_id)
-    Note over Contract: Status: InProgress
+    Note over Client,Freelancer: 2. Execution & Milestone Deliverables
+    Freelancer->>Contract: submit_deliverable(jobId, sha256_hash)
+    Note over Contract: Deliverable hash immutably anchored
 
-    Freelancer->>Contract: submit_deliverable(job_id, sha256_hash)
-
-    alt Happy Path: Approval & Release
-        Client->>Contract: release_milestone(job_id, milestone_id)
-        Contract->>Freelancer: Transfer pro-rata milestone payout (less fee)
-    else Timeout Refund
+    alt Milestone Approved
+        Client->>Contract: release_milestone(jobId, milestone_index)
+        Contract->>Freelancer: Transfer pro-rata payout (less fee)
+        Note over Contract: Status: PartiallyReleased or Completed
+    else Timeout Exceeded
         Note over Contract: Ledger timestamp > timeout_timestamp
-        Client->>Contract: claim_timeout_refund(job_id)
-        Contract->>Client: Return unreleased funds
+        Client->>Contract: timeout_refund(jobId)
+        Contract->>Client: Return unreleased tokens
+        Note over Contract: Status: Refunded
     else Dispute Raised
-        Client->>Contract: raise_dispute(job_id)
-        Arbitrator->>Contract: resolve_dispute(job_id, client_award, freelancer_award)
+        Client->>Contract: dispute_escrow(jobId)
+        Note over Contract: Status: Disputed
+        Arbitrator->>Contract: resolve_dispute(jobId, client_amt, freelancer_amt)
         Contract->>Client: Transfer client award
         Contract->>Freelancer: Transfer freelancer award
+        Note over Contract: Status: Resolved
     end
+```
+
+---
+
+## ⚡ Quick Start: Smart Contract (Rust)
+
+### Prerequisites
+- Rust `>= 1.74`
+- WebAssembly target `wasm32v1-none` (`rustup target add wasm32v1-none`)
+
+### Build & Test
+```bash
+# Navigate to contract directory
+cd contracts/escrow
+
+# Run unit and integration tests
+cargo test
+
+# Enforce zero-warning clippy linting
+cargo clippy --all-targets -- -D warnings
+
+# Check code formatting
+cargo fmt --check
+
+# Compile production-optimized WebAssembly artifact
+cargo build --target wasm32v1-none --release
+```
+
+Compiled WASM bytecode will be located at:
+`target/wasm32v1-none/release/soroban_escrow_contract.wasm`
+
+---
+
+## 📦 Quick Start: TypeScript SDK
+
+### Installation
+```bash
+npm install @stellar-purplepay/escrow-sdk @stellar/stellar-sdk
+```
+
+### Complete Code Example
+```typescript
+import { EscrowClient, toAtomicUnits, fromAtomicUnits } from "@stellar-purplepay/escrow-sdk";
+
+// 1. Initialize the client
+const client = new EscrowClient({
+  rpcUrl: "https://soroban-testnet.stellar.org",
+  networkPassphrase: "Test SDF Network ; September 2015",
+  contractId: "CA5DEQZ64FKZL7KVWOEKXWJVZJXP4JKEQUAO7GFNYZYQRKI6N5CWEDU3",
+});
+
+// 2. Prepare an escrow creation payload with 2 milestones
+const futureTimeout = Math.floor(Date.now() / 1000) + 14 * 86400; // 14 days from now
+
+const createPayload = client.prepareCreateEscrow({
+  jobId: "job-website-redesign-2026",
+  client: "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7",
+  freelancer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+  tokenAddress: "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC", // USDC token contract
+  amount: toAtomicUnits("1500", 7), // Exactly 1,500 USDC (in stroops)
+  timeoutTimestamp: futureTimeout,
+  arbitratorAddress: "GAPTL2OLC4YDSJJ6MGT3MMBWIYD4GSVKQFU26647IOMBEEXUURNUM32X",
+  milestones: [
+    { description: "Figma UI/UX Mockups", percentage: 40 },
+    { description: "Production Next.js Frontend", percentage: 60 },
+  ],
+});
+
+console.log("Invocation Method:", createPayload.method);
+console.log("Contract Arguments:", createPayload.args);
+
+// 3. Prepare milestone release payload
+const releasePayload = client.prepareReleaseMilestone({
+  jobId: "job-website-redesign-2026",
+  client: "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7",
+  milestoneIndex: 0,
+});
+
+console.log("Release Payload:", releasePayload);
+```
+
+---
+
+## 🧪 Testing
+
+The repository maintains full end-to-end test coverage for both Rust and TypeScript:
+
+```bash
+# Test Rust Contract (Unit & Integration)
+cd contracts/escrow
+cargo test
+
+# Test TypeScript SDK (Jest)
+cd ../../packages/sdk
+npm test
 ```
 
 ---
@@ -78,146 +188,37 @@ sequenceDiagram
 ```text
 soroban-escrow-sdk/
 ├── contracts/
-│   └── escrow/                     # Rust Soroban smart contract
-│       ├── Cargo.toml              # soroban-sdk 27+ dependencies
+│   └── escrow/                     # Audited Soroban smart contract (Rust)
+│       ├── Cargo.toml              # soroban-sdk 27.0.6 dependencies
 │       └── src/
-│           ├── lib.rs              # Contract entrypoint & implementation
-│           ├── types.rs            # Contract data types & storage keys
-│           ├── errors.rs           # Typed Soroban contract errors
-│           └── test.rs             # Full unit test suite (5 test cases)
+│           ├── lib.rs              # Contract entrypoints, state transitions & fee ceiling
+│           ├── types.rs            # Data structures, EscrowStatus & storage keys
+│           ├── errors.rs           # Typed Soroban contract errors (16–18 added)
+│           └── test.rs             # Full unit test suite (auth, math, milestones, ceilings)
 ├── packages/
 │   └── sdk/                        # TypeScript client SDK
-│       ├── package.json            # @stellar-purplepay/escrow-sdk
-│       ├── tsconfig.json
+│       ├── package.json            # @stellar-purplepay/escrow-sdk package definition
+│       ├── tsconfig.json           # Strict TypeScript configuration
 │       ├── src/
-│       │   ├── client.ts           # EscrowClient implementation
-│       │   ├── types.ts            # TypeScript interfaces
-│       │   ├── utils.ts            # Atomic unit & address validators
-│       │   └── errors.ts           # Custom SDK errors
-│       └── test/                   # Jest unit tests (11 test cases)
+│           ├── client.ts           # EscrowClient implementation
+│           ├── types.ts            # Type interfaces and argument DTOs
+│           ├── utils.ts            # Precision stroop conversion & StrKey checksum validation
+│           └── errors.ts           # ValidationError & ClientError hierarchies
+│       └── test/                   # Jest unit test suite (14 test cases)
 ├── examples/
 │   └── quickstart.ts               # End-to-end integration walkthrough
 ├── .github/
-│   └── workflows/ci.yml            # Automated CI for Rust & TypeScript
-├── CONTRIBUTING.md                 # Developer setup and PR standards
-├── ROADMAP.md                      # Drips Wave sprint backlog & issue points
+│   └── workflows/ci.yml            # Automated GitHub Actions CI (Rust, Clippy, SDK)
+├── CHANGELOG.md                    # Release history and audit remediation log
+├── CODE_OF_CONDUCT.md              # Contributor Covenant v2.1
+├── CONTRIBUTING.md                 # Development, formatting, and PR guidelines
+├── SECURITY.md                     # Vulnerability reporting policy & SLAs
 └── LICENSE                         # MIT License
 ```
 
 ---
 
-## ⚡ Quick Start
+## 📄 License & Community
 
-### 1. Smart Contract Development (Rust)
-
-#### Prerequisites
-- Rust `>= 1.74`
-- Soroban SDK `27.0.6`
-
-```bash
-cd contracts/escrow
-
-# Run unit tests
-cargo test
-
-# Build optimized WASM artifact
-cargo build --target wasm32v1-none --release
-```
-
----
-
-### 2. TypeScript SDK Usage
-
-#### Installation
-```bash
-npm install @stellar-purplepay/escrow-sdk @stellar/stellar-sdk
-```
-
-#### Basic Usage Example
-```typescript
-import { EscrowClient, toAtomicUnits } from "@stellar-purplepay/escrow-sdk";
-
-const client = new EscrowClient({
-  rpcUrl: "https://soroban-testnet.stellar.org",
-  networkPassphrase: "Test SDF Network ; September 2015",
-  contractId: "CA5DEQZ64FKZL7KVWOEKXWJVZJXP4JKEQUAO7GFNYZYQRKI6N5CWEDU3",
-});
-
-// 1. Prepare escrow with pro-rata milestones
-const createPayload = client.prepareCreateEscrow({
-  jobId: "audit-task-001",
-  client: "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7",
-  freelancer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-  tokenAddress: "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC", // USDC contract
-  amount: toAtomicUnits("1000", 7), // 1,000 USDC
-  timeoutTimestamp: Math.floor(Date.now() / 1000) + 14 * 86400, // 14 days
-  arbitratorAddress: "GCKCWVE4EZP4SGF4YQ24WTYUGU6F4KDTQELFTX2NYW7K2G6KFFTY4VLL",
-  milestones: [
-    { description: "Milestone 1: Preliminary Analysis", percentage: 40 },
-    { description: "Milestone 2: Final Report Delivery", percentage: 60 },
-  ],
-});
-
-// 2. Submit deliverable cryptographic proof (SHA-256)
-const deliverablePayload = client.prepareSubmitDeliverable(
-  "audit-task-001",
-  "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-);
-
-// 3. Client approves Milestone 1
-const releasePayload = client.prepareReleaseMilestone(
-  "audit-task-001",
-  "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7",
-  1
-);
-```
-
----
-
-## 🧪 Comprehensive Testing
-
-### Smart Contract Tests
-```bash
-cd contracts/escrow
-cargo test
-```
-* Coverage:
-  * Single milestone creation & instant release
-  * Multi-milestone pro-rata arithmetic & fee deductions
-  * Cancel and refund before work commences
-  * Permissionless timeout refunds after deadline expiration
-  * Dispute resolution & arbitrator fund allocation
-
-### SDK Tests
-```bash
-cd packages/sdk
-npm test
-```
-* Coverage:
-  * Address format validation
-  * Atomic unit conversions (7 decimals for XLM/USDC)
-  * Milestone percentage summation validation (strictly 100%)
-  * Future timeout timestamp assertion
-  * Deliverable hash 32-byte hex validation
-
----
-
-## 🌊 Drips Wave Contributor Backlog
-
-We actively participate in **Stellar Drips Wave** monthly sprint cycles! 
-
-Check [ROADMAP.md](ROADMAP.md) for open contributor tasks categorized by points (**100 / 150 / 200 pts**):
-- **#1 [SDK] Add Freighter wallet transaction signing helper** (150 pts)
-- **#2 [Contract] Migrate event emission to Soroban `#[contractevent]`** (100 pts)
-- **#3 [SDK] Add resource fee and CPU instruction estimator helper** (150 pts)
-- **#4 [Contract] Add proptest property-based tests for milestone splits** (200 pts)
-- **#5 [SDK] Implement auto-retry with backoff on Soroban RPC 429s** (150 pts)
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
-
----
-
-## 📜 License
-
-Licensed under the [MIT License](LICENSE).
+Distributed under the **MIT License**. See [LICENSE](LICENSE) for details.  
+Built with 💜 by the **Stellar PurplePay** community for the Stellar ecosystem.

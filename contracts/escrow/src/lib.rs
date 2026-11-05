@@ -1,9 +1,7 @@
 #![no_std]
 #![allow(deprecated)]
 
-use soroban_sdk::{
-    contract, contractimpl, symbol_short, token, Address, BytesN, Env, String, Vec,
-};
+use soroban_sdk::{contract, contractimpl, symbol_short, token, Address, BytesN, Env, String, Vec};
 
 mod errors;
 mod types;
@@ -13,6 +11,18 @@ mod test;
 
 pub use errors::EscrowError;
 pub use types::*;
+
+/// Maximum allowed platform fee: 10.00% (1,000 bps)
+pub const MAX_FEE_BPS: u32 = 1_000;
+/// Maximum supported milestones per escrow to ensure bounded gas execution
+pub const MAX_MILESTONES: u32 = 25;
+
+fn validate_fee(fee_bps: u32) -> Result<(), EscrowError> {
+    if fee_bps > MAX_FEE_BPS {
+        return Err(EscrowError::InvalidFee);
+    }
+    Ok(())
+}
 
 #[contract]
 pub struct EscrowContract;
@@ -30,6 +40,7 @@ impl EscrowContract {
             return Err(EscrowError::AlreadyInitialized);
         }
         admin.require_auth();
+        validate_fee(fee_bps)?;
 
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Treasury, &treasury);
@@ -46,6 +57,7 @@ impl EscrowContract {
             .get(&DataKey::Admin)
             .ok_or(EscrowError::NotInitialized)?;
         admin.require_auth();
+        validate_fee(fee_bps)?;
 
         env.storage().instance().set(&DataKey::FeeBps, &fee_bps);
         Ok(())
@@ -63,6 +75,10 @@ impl EscrowContract {
 
         if params.total_amount <= 0 {
             return Err(EscrowError::InvalidAmount);
+        }
+
+        if milestones.len() > MAX_MILESTONES {
+            return Err(EscrowError::InvalidMilestoneCount);
         }
 
         let escrow_key = DataKey::Escrow(job_id.clone());
@@ -92,7 +108,15 @@ impl EscrowContract {
             let milestone_count = milestones.len();
 
             for (idx, m) in milestones.iter().enumerate() {
-                total_pct += m.percentage;
+                if m.percentage == 0 || m.percentage > 100 {
+                    return Err(EscrowError::InvalidMilestonePercentages);
+                }
+                if m.description.is_empty() || m.description.len() > 256 {
+                    return Err(EscrowError::InvalidMilestoneData);
+                }
+                total_pct = total_pct
+                    .checked_add(m.percentage)
+                    .ok_or(EscrowError::InvalidMilestonePercentages)?;
                 let is_last = (idx + 1) == (milestone_count as usize);
 
                 let milestone_amount = if is_last {
@@ -117,7 +141,11 @@ impl EscrowContract {
 
         // Transfer funds from client to contract custody
         let token_client = token::Client::new(&env, &params.token);
-        token_client.transfer(&client, &env.current_contract_address(), &params.total_amount);
+        token_client.transfer(
+            &client,
+            &env.current_contract_address(),
+            &params.total_amount,
+        );
 
         let escrow = Escrow {
             job_id: job_id.clone(),
@@ -137,8 +165,14 @@ impl EscrowContract {
             .persistent()
             .set(&DataKey::Milestones(job_id.clone()), &contract_milestones);
 
-        env.storage().persistent().extend_ttl(&escrow_key, 100_000, 200_000);
-        env.storage().persistent().extend_ttl(&DataKey::Milestones(job_id.clone()), 100_000, 200_000);
+        env.storage()
+            .persistent()
+            .extend_ttl(&escrow_key, 100_000, 200_000);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Milestones(job_id.clone()),
+            100_000,
+            200_000,
+        );
 
         env.events().publish(
             (symbol_short!("escrow"), symbol_short!("created")),
@@ -170,10 +204,8 @@ impl EscrowContract {
         escrow.status = EscrowStatus::InProgress;
         env.storage().persistent().set(&escrow_key, &escrow);
 
-        env.events().publish(
-            (symbol_short!("escrow"), symbol_short!("started")),
-            job_id,
-        );
+        env.events()
+            .publish((symbol_short!("escrow"), symbol_short!("started")), job_id);
 
         Ok(())
     }
@@ -202,10 +234,9 @@ impl EscrowContract {
             return Err(EscrowError::InvalidStatus);
         }
 
-        env.storage().persistent().set(
-            &DataKey::Deliverable(job_id.clone()),
-            &deliverable_hash,
-        );
+        env.storage()
+            .persistent()
+            .set(&DataKey::Deliverable(job_id.clone()), &deliverable_hash);
 
         env.events().publish(
             (symbol_short!("escrow"), symbol_short!("deliv")),
@@ -279,16 +310,18 @@ impl EscrowContract {
         }
 
         env.storage().persistent().set(&escrow_key, &escrow);
-        env.storage().persistent().set(&milestones_key, &updated_milestones);
-        env.storage().persistent().extend_ttl(&escrow_key, 100_000, 200_000);
-        env.storage().persistent().extend_ttl(&milestones_key, 100_000, 200_000);
+        env.storage()
+            .persistent()
+            .set(&milestones_key, &updated_milestones);
+        env.storage()
+            .persistent()
+            .extend_ttl(&escrow_key, 100_000, 200_000);
+        env.storage()
+            .persistent()
+            .extend_ttl(&milestones_key, 100_000, 200_000);
 
         // Interactions: external token settlement
-        let fee_bps: u32 = env
-            .storage()
-            .instance()
-            .get(&DataKey::FeeBps)
-            .unwrap_or(0);
+        let fee_bps: u32 = env.storage().instance().get(&DataKey::FeeBps).unwrap_or(0);
         let treasury: Option<Address> = env.storage().instance().get(&DataKey::Treasury);
 
         let fee = (release_amount * (fee_bps as i128)) / 10_000;
@@ -298,11 +331,7 @@ impl EscrowContract {
 
         if fee > 0 {
             if let Some(treasury_addr) = treasury {
-                token_client.transfer(
-                    &env.current_contract_address(),
-                    &treasury_addr,
-                    &fee,
-                );
+                token_client.transfer(&env.current_contract_address(), &treasury_addr, &fee);
             }
         }
 
@@ -321,11 +350,7 @@ impl EscrowContract {
     }
 
     /// Client cancels the escrow and reclaims unreleased funds if work has not yet commenced.
-    pub fn cancel_and_refund(
-        env: Env,
-        job_id: String,
-        client: Address,
-    ) -> Result<(), EscrowError> {
+    pub fn cancel_and_refund(env: Env, job_id: String, client: Address) -> Result<(), EscrowError> {
         client.require_auth();
 
         let escrow_key = DataKey::Escrow(job_id.clone());
@@ -371,7 +396,8 @@ impl EscrowContract {
             .ok_or(EscrowError::EscrowNotFound)?;
 
         let now = env.ledger().timestamp();
-        let is_standard_timeout = (escrow.status == EscrowStatus::Created || escrow.status == EscrowStatus::InProgress)
+        let is_standard_timeout = (escrow.status == EscrowStatus::Created
+            || escrow.status == EscrowStatus::InProgress)
             && now >= escrow.timeout_timestamp;
         let is_dispute_timeout = escrow.status == EscrowStatus::Disputed
             && now >= (escrow.timeout_timestamp + 2_592_000);
@@ -394,7 +420,9 @@ impl EscrowContract {
             let token_client = token::Client::new(&env, &escrow.token);
             token_client.transfer(&env.current_contract_address(), &escrow.client, &remaining);
         }
-        env.storage().persistent().extend_ttl(&escrow_key, 100_000, 200_000);
+        env.storage()
+            .persistent()
+            .extend_ttl(&escrow_key, 100_000, 200_000);
 
         env.events().publish(
             (symbol_short!("escrow"), symbol_short!("timeout")),
@@ -460,7 +488,10 @@ impl EscrowContract {
         }
 
         let remaining = escrow.total_amount - escrow.released_amount;
-        if client_award < 0 || freelancer_award < 0 || (client_award + freelancer_award) != remaining {
+        if client_award < 0
+            || freelancer_award < 0
+            || (client_award + freelancer_award) != remaining
+        {
             return Err(EscrowError::InvalidAmount);
         }
 
@@ -520,4 +551,3 @@ impl EscrowContract {
             .ok_or(EscrowError::EscrowNotFound)
     }
 }
-

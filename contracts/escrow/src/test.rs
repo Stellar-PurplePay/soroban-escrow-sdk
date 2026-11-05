@@ -1,7 +1,10 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::{testutils::{Address as _, Ledger}, token, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    token, Address, BytesN, Env, String, Vec,
+};
 
 fn setup_test<'a>(
     env: &'a Env,
@@ -304,3 +307,93 @@ fn test_dispute_and_arbitration_resolution() {
     assert_eq!(resolved_escrow.status, EscrowStatus::Completed);
 }
 
+#[test]
+fn test_fee_ceiling_enforced() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    let escrow_contract_id = env.register(EscrowContract, ());
+    let escrow_client = EscrowContractClient::new(&env, &escrow_contract_id);
+
+    // Fee above 1,000 bps (10.00%) must fail at initialization
+    let res = escrow_client.try_initialize(&admin, &treasury, &1_001);
+    assert_eq!(res, Err(Ok(EscrowError::InvalidFee)));
+
+    // Fee of u32::MAX must fail
+    let res_max = escrow_client.try_initialize(&admin, &treasury, &u32::MAX);
+    assert_eq!(res_max, Err(Ok(EscrowError::InvalidFee)));
+
+    // Fee within ceiling succeeds
+    escrow_client.initialize(&admin, &treasury, &1_000);
+
+    // Dynamic fee update above ceiling must fail
+    let res_update = escrow_client.try_set_fee_bps(&1_001);
+    assert_eq!(res_update, Err(Ok(EscrowError::InvalidFee)));
+
+    // Zero fee update is valid
+    assert!(escrow_client.try_set_fee_bps(&0).is_ok());
+}
+
+#[test]
+fn test_milestone_validation_enforced() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (
+        admin,
+        treasury,
+        client,
+        freelancer,
+        arbitrator,
+        _token_client,
+        _token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let job_id = String::from_str(&env, "job-milestone-ceiling");
+    let timeout = env.ledger().timestamp() + 3600;
+
+    let params = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address.clone(),
+        total_amount: 1_000_000,
+        timeout_timestamp: timeout,
+        arbitrator: arbitrator.clone(),
+    };
+
+    // 1. Exceeding 25 milestones must be rejected
+    let mut excess_milestones = Vec::new(&env);
+    for _ in 0..26 {
+        excess_milestones.push_back(MilestoneInput {
+            description: String::from_str(&env, "task"),
+            percentage: 3,
+        });
+    }
+    let res_count = escrow_client.try_create_escrow(&job_id, &client, &params, &excess_milestones);
+    assert_eq!(res_count, Err(Ok(EscrowError::InvalidMilestoneCount)));
+
+    // 2. 0% milestone must be rejected
+    let mut zero_milestones = Vec::new(&env);
+    zero_milestones.push_back(MilestoneInput {
+        description: String::from_str(&env, "zero"),
+        percentage: 0,
+    });
+    zero_milestones.push_back(MilestoneInput {
+        description: String::from_str(&env, "hundred"),
+        percentage: 100,
+    });
+    let res_zero = escrow_client.try_create_escrow(&job_id, &client, &params, &zero_milestones);
+    assert_eq!(res_zero, Err(Ok(EscrowError::InvalidMilestonePercentages)));
+
+    // 3. Empty description must be rejected
+    let mut empty_desc_milestones = Vec::new(&env);
+    empty_desc_milestones.push_back(MilestoneInput {
+        description: String::from_str(&env, ""),
+        percentage: 100,
+    });
+    let res_empty =
+        escrow_client.try_create_escrow(&job_id, &client, &params, &empty_desc_milestones);
+    assert_eq!(res_empty, Err(Ok(EscrowError::InvalidMilestoneData)));
+}

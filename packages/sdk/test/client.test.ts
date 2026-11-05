@@ -137,10 +137,37 @@ describe("EscrowClient", () => {
       expect(human).toBe("100.5");
     });
 
-    it("should correctly validate Stellar addresses", () => {
+    it("should strictly reject excess precision rather than truncating", () => {
+      // 8 decimals when max allowed is 7 must throw
+      expect(() => toAtomicUnits("1.12345678", 7)).toThrow(ValidationError);
+      expect(() => toAtomicUnits("10.00000001", 7)).toThrow(/Excess decimal precision/);
+    });
+
+    it("should reject negative amounts, zero, and scientific notation", () => {
+      expect(() => toAtomicUnits("-100", 7)).toThrow(ValidationError);
+      expect(() => toAtomicUnits("0", 7)).toThrow(/Amount must be strictly positive/);
+      expect(() => toAtomicUnits("1e-5", 7)).toThrow(ValidationError);
+      expect(() => toAtomicUnits("abc", 7)).toThrow(ValidationError);
+    });
+
+    it("should correctly validate Stellar addresses with checksums", () => {
       expect(isValidStellarAddress(validClientAddress)).toBe(true);
       expect(isValidStellarAddress(validTokenAddress)).toBe(true);
       expect(isValidStellarAddress("invalid_address")).toBe(false);
+      // Corrupted StrKey checksum must fail
+      const corruptedAddress = validClientAddress.slice(0, -1) + "X";
+      expect(isValidStellarAddress(corruptedAddress)).toBe(false);
+    });
+
+    it("should enforce milestone count and description boundaries", () => {
+      const tooMany = Array.from({ length: 26 }, () => ({
+        description: "Milestone",
+        percentage: 3,
+      }));
+      expect(() => validateMilestones(tooMany)).toThrow(/Milestone count cannot exceed 25/);
+
+      const emptyDesc = [{ description: "", percentage: 100 }];
+      expect(() => validateMilestones(emptyDesc)).toThrow(/Milestone description cannot be empty/);
     });
   });
 });

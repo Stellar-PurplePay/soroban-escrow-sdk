@@ -19,5 +19,7 @@ pub enum EscrowError {
     InvalidDeliverableHash = 13,
     DisputeAlreadyRaised = 14,
     EscrowNotDisputed = 15,
+    InvalidFee = 16,
+    InvalidMilestoneCount = 17,
+    InvalidMilestoneData = 18,
 }
-

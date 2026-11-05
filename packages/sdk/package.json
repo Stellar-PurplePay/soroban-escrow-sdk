@@ -1,0 +1,35 @@
+{
+  "name": "@stellar-purplepay/escrow-sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for interacting with the Stellar Soroban milestone escrow smart contract",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "lint": "eslint src/ --ext .ts"
+  },
+  "dependencies": {
+    "@stellar/stellar-sdk": "^12.3.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.10.1",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.7.2"
+  },
+  "keywords": [
+    "stellar",
+    "soroban",
+    "escrow",
+    "sdk",
+    "freelance",
+    "milestones"
+  ],
+  "author": "Stellar PurplePay Community",
+  "license": "MIT"
+}

@@ -270,7 +270,20 @@ impl EscrowContract {
             return Err(EscrowError::MilestoneNotFound);
         }
 
-        // Payout settlement
+        // Checks & Effects: update state before external interactions (CEI pattern)
+        escrow.released_amount += release_amount;
+        if all_completed || escrow.released_amount >= escrow.total_amount {
+            escrow.status = EscrowStatus::Completed;
+        } else {
+            escrow.status = EscrowStatus::InProgress;
+        }
+
+        env.storage().persistent().set(&escrow_key, &escrow);
+        env.storage().persistent().set(&milestones_key, &updated_milestones);
+        env.storage().persistent().extend_ttl(&escrow_key, 100_000, 200_000);
+        env.storage().persistent().extend_ttl(&milestones_key, 100_000, 200_000);
+
+        // Interactions: external token settlement
         let fee_bps: u32 = env
             .storage()
             .instance()
@@ -298,18 +311,6 @@ impl EscrowContract {
             &escrow.freelancer,
             &freelancer_payout,
         );
-
-        escrow.released_amount += release_amount;
-        if all_completed || escrow.released_amount >= escrow.total_amount {
-            escrow.status = EscrowStatus::Completed;
-        } else {
-            escrow.status = EscrowStatus::InProgress;
-        }
-
-        env.storage().persistent().set(&escrow_key, &escrow);
-        env.storage().persistent().set(&milestones_key, &updated_milestones);
-        env.storage().persistent().extend_ttl(&escrow_key, 100_000, 200_000);
-        env.storage().persistent().extend_ttl(&milestones_key, 100_000, 200_000);
 
         env.events().publish(
             (symbol_short!("escrow"), symbol_short!("released")),
@@ -343,13 +344,13 @@ impl EscrowContract {
         }
 
         let remaining = escrow.total_amount - escrow.released_amount;
+        escrow.status = EscrowStatus::Refunded;
+        env.storage().persistent().set(&escrow_key, &escrow);
+
         if remaining > 0 {
             let token_client = token::Client::new(&env, &escrow.token);
             token_client.transfer(&env.current_contract_address(), &escrow.client, &remaining);
         }
-
-        escrow.status = EscrowStatus::Refunded;
-        env.storage().persistent().set(&escrow_key, &escrow);
 
         env.events().publish(
             (symbol_short!("escrow"), symbol_short!("refunded")),
@@ -386,13 +387,13 @@ impl EscrowContract {
         }
 
         let remaining = escrow.total_amount - escrow.released_amount;
+        escrow.status = EscrowStatus::Refunded;
+        env.storage().persistent().set(&escrow_key, &escrow);
+
         if remaining > 0 {
             let token_client = token::Client::new(&env, &escrow.token);
             token_client.transfer(&env.current_contract_address(), &escrow.client, &remaining);
         }
-
-        escrow.status = EscrowStatus::Refunded;
-        env.storage().persistent().set(&escrow_key, &escrow);
         env.storage().persistent().extend_ttl(&escrow_key, 100_000, 200_000);
 
         env.events().publish(
@@ -463,6 +464,10 @@ impl EscrowContract {
             return Err(EscrowError::InvalidAmount);
         }
 
+        escrow.released_amount += freelancer_award;
+        escrow.status = EscrowStatus::Completed;
+        env.storage().persistent().set(&escrow_key, &escrow);
+
         let token_client = token::Client::new(&env, &escrow.token);
 
         if client_award > 0 {
@@ -480,10 +485,6 @@ impl EscrowContract {
                 &freelancer_award,
             );
         }
-
-        escrow.released_amount += freelancer_award;
-        escrow.status = EscrowStatus::Completed;
-        env.storage().persistent().set(&escrow_key, &escrow);
 
         env.events().publish(
             (symbol_short!("escrow"), symbol_short!("resolved")),

@@ -88,9 +88,20 @@ impl EscrowContract {
             });
         } else {
             let mut total_pct: u32 = 0;
+            let mut allocated_so_far: i128 = 0;
+            let milestone_count = milestones.len();
+
             for (idx, m) in milestones.iter().enumerate() {
                 total_pct += m.percentage;
-                let milestone_amount = (params.total_amount * (m.percentage as i128)) / 100;
+                let is_last = (idx + 1) == (milestone_count as usize);
+
+                let milestone_amount = if is_last {
+                    params.total_amount - allocated_so_far
+                } else {
+                    (params.total_amount * (m.percentage as i128)) / 100
+                };
+                allocated_so_far += milestone_amount;
+
                 contract_milestones.push_back(Milestone {
                     id: (idx + 1) as u32,
                     description: m.description,
@@ -125,6 +136,9 @@ impl EscrowContract {
         env.storage()
             .persistent()
             .set(&DataKey::Milestones(job_id.clone()), &contract_milestones);
+
+        env.storage().persistent().extend_ttl(&escrow_key, 100_000, 200_000);
+        env.storage().persistent().extend_ttl(&DataKey::Milestones(job_id.clone()), 100_000, 200_000);
 
         env.events().publish(
             (symbol_short!("escrow"), symbol_short!("created")),
@@ -294,6 +308,8 @@ impl EscrowContract {
 
         env.storage().persistent().set(&escrow_key, &escrow);
         env.storage().persistent().set(&milestones_key, &updated_milestones);
+        env.storage().persistent().extend_ttl(&escrow_key, 100_000, 200_000);
+        env.storage().persistent().extend_ttl(&milestones_key, 100_000, 200_000);
 
         env.events().publish(
             (symbol_short!("escrow"), symbol_short!("released")),
@@ -353,13 +369,20 @@ impl EscrowContract {
             .get(&escrow_key)
             .ok_or(EscrowError::EscrowNotFound)?;
 
-        if escrow.status != EscrowStatus::Created && escrow.status != EscrowStatus::InProgress {
-            return Err(EscrowError::InvalidStatus);
-        }
-
         let now = env.ledger().timestamp();
-        if now < escrow.timeout_timestamp {
-            return Err(EscrowError::TimeoutNotExpired);
+        let is_standard_timeout = (escrow.status == EscrowStatus::Created || escrow.status == EscrowStatus::InProgress)
+            && now >= escrow.timeout_timestamp;
+        let is_dispute_timeout = escrow.status == EscrowStatus::Disputed
+            && now >= (escrow.timeout_timestamp + 2_592_000);
+
+        if !is_standard_timeout && !is_dispute_timeout {
+            if escrow.status == EscrowStatus::Disputed {
+                return Err(EscrowError::InvalidStatus);
+            }
+            if now < escrow.timeout_timestamp {
+                return Err(EscrowError::TimeoutNotExpired);
+            }
+            return Err(EscrowError::InvalidStatus);
         }
 
         let remaining = escrow.total_amount - escrow.released_amount;
@@ -370,6 +393,7 @@ impl EscrowContract {
 
         escrow.status = EscrowStatus::Refunded;
         env.storage().persistent().set(&escrow_key, &escrow);
+        env.storage().persistent().extend_ttl(&escrow_key, 100_000, 200_000);
 
         env.events().publish(
             (symbol_short!("escrow"), symbol_short!("timeout")),

@@ -8,6 +8,7 @@ target/
 dist/
 build/
 *.wasm
+test_snapshots/
 
 # Environment
 .env

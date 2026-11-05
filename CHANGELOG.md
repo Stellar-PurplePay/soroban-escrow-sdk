@@ -51,3 +51,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Comprehensive Jest test suite covering client instantiation and payload building.
 - **CI/CD Pipeline**:
   - GitHub Actions workflow automating Rust contract testing and TypeScript SDK builds.
+

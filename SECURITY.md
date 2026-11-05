@@ -51,3 +51,4 @@ The following components are **in scope** for security reviews:
 | **Public Disclosure & Release** | Coordinated with reporter upon deployment or within **90 days** |
 
 We adhere to standard coordinated vulnerability disclosure best practices.
+

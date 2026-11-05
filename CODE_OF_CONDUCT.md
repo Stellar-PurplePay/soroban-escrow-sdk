@@ -77,3 +77,4 @@ the consequences for any action they deem in violation of this Code of Conduct:
 ### 4. Permanent Ban
 **Community Impact**: Demonstrating a pattern of violation of community standards, or sustained and harmful conduct.  
 **Consequence**: A permanent ban from any sort of public interaction within the community.
+

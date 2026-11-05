@@ -1,0 +1,29 @@
+{
+  "name": "soroban-escrow-sdk-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Developer kit and TypeScript SDK for non-custodial milestone escrow on Stellar (Soroban)",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build:contract": "cd contracts/escrow && cargo build --target wasm32v1-none --release",
+    "test:contract": "cd contracts/escrow && cargo test",
+    "build:sdk": "npm run --workspace=@stellar-purplepay/escrow-sdk build",
+    "test:sdk": "npm run --workspace=@stellar-purplepay/escrow-sdk test",
+    "test": "npm run test:contract && npm run test:sdk",
+    "lint": "npm run --workspace=@stellar-purplepay/escrow-sdk lint"
+  },
+  "keywords": [
+    "stellar",
+    "soroban",
+    "escrow",
+    "smart-contracts",
+    "sdk",
+    "blockchain",
+    "typescript"
+  ],
+  "author": "Soroban Escrow Contributors",
+  "license": "MIT"
+}
+

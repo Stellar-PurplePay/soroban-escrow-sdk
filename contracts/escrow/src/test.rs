@@ -261,7 +261,7 @@ fn test_dispute_and_arbitration_resolution() {
 
     let (
         _admin,
-        _treasury,
+        treasury,
         client,
         freelancer,
         arbitrator,
@@ -293,14 +293,19 @@ fn test_dispute_and_arbitration_resolution() {
 
     let client_prev_balance = token_client.balance(&client);
     let freelancer_prev_balance = token_client.balance(&freelancer);
+    let treasury_prev_balance = token_client.balance(&treasury);
 
-    // Arbitrator resolves: 600,000 back to client, 400,000 to freelancer
+    // Arbitrator resolves: 600,000 back to client, 400,000 to freelancer (with 1% fee = 4,000 to treasury)
     escrow_client.resolve_dispute(&job_id, &arbitrator, &600_000, &400_000);
 
     assert_eq!(token_client.balance(&client), client_prev_balance + 600_000);
     assert_eq!(
         token_client.balance(&freelancer),
-        freelancer_prev_balance + 400_000
+        freelancer_prev_balance + 396_000
+    );
+    assert_eq!(
+        token_client.balance(&treasury),
+        treasury_prev_balance + 4_000
     );
 
     let resolved_escrow = escrow_client.get_escrow(&job_id);

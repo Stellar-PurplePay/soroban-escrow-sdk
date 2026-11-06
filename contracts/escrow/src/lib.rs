@@ -496,6 +496,12 @@ impl EscrowContract {
         escrow.status = EscrowStatus::Completed;
         env.storage().persistent().set(&escrow_key, &escrow);
 
+        let fee_bps: u32 = env.storage().instance().get(&DataKey::FeeBps).unwrap_or(0);
+        let treasury: Option<Address> = env.storage().instance().get(&DataKey::Treasury);
+
+        let fee = (freelancer_award * (fee_bps as i128)) / 10_000;
+        let freelancer_payout = freelancer_award - fee;
+
         let token_client = token::Client::new(&env, &escrow.token);
 
         if client_award > 0 {
@@ -506,11 +512,17 @@ impl EscrowContract {
             );
         }
 
-        if freelancer_award > 0 {
+        if fee > 0 {
+            if let Some(treasury_addr) = treasury {
+                token_client.transfer(&env.current_contract_address(), &treasury_addr, &fee);
+            }
+        }
+
+        if freelancer_payout > 0 {
             token_client.transfer(
                 &env.current_contract_address(),
                 &escrow.freelancer,
-                &freelancer_award,
+                &freelancer_payout,
             );
         }
 

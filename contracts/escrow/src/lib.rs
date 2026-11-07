@@ -45,6 +45,7 @@ impl EscrowContract {
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Treasury, &treasury);
         env.storage().instance().set(&DataKey::FeeBps, &fee_bps);
+        env.storage().instance().extend_ttl(100_000, 200_000);
 
         Ok(())
     }

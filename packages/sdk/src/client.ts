@@ -244,6 +244,38 @@ export class EscrowClient {
   }
 
   /**
+   * Prepare parameters for extending an unapproved milestone deadline.
+   */
+  public prepareExtendMilestoneDeadline(
+    jobId: string,
+    clientAddress: string,
+    milestoneId: number,
+    extensionSeconds: number
+  ) {
+    if (!jobId) throw new ValidationError("jobId is required");
+    if (!isValidStellarAddress(clientAddress)) {
+      throw new ValidationError(`Invalid client address: ${clientAddress}`);
+    }
+    if (!Number.isInteger(milestoneId) || milestoneId <= 0) {
+      throw new ValidationError("milestoneId must be a positive integer");
+    }
+    if (!Number.isInteger(extensionSeconds) || extensionSeconds <= 0) {
+      throw new ValidationError("extensionSeconds must be a positive integer");
+    }
+
+    return {
+      contractId: this.contractId,
+      method: "extend_milestone_deadline",
+      args: {
+        job_id: jobId,
+        client: clientAddress,
+        milestone_id: milestoneId,
+        extension_seconds: BigInt(extensionSeconds),
+      },
+    };
+  }
+
+  /**
    * Prepare parameters for claiming timeout refund.
    */
   public prepareClaimTimeoutRefund(jobId: string) {

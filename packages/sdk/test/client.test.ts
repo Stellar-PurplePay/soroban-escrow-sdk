@@ -169,6 +169,26 @@ describe("EscrowClient", () => {
       expect(payload.args.milestone_id).toBe(2);
     });
 
+    it("should prepare extend_milestone_deadline payload with valid parameters", () => {
+      const payload = client.prepareExtendMilestoneDeadline(
+        "job-1",
+        validClientAddress,
+        1,
+        86400
+      );
+      expect(payload.method).toBe("extend_milestone_deadline");
+      expect(payload.args.job_id).toBe("job-1");
+      expect(payload.args.client).toBe(validClientAddress);
+      expect(payload.args.milestone_id).toBe(1);
+      expect(payload.args.extension_seconds).toBe(86400n);
+    });
+
+    it("should reject negative extensionSeconds in prepareExtendMilestoneDeadline", () => {
+      expect(() => {
+        client.prepareExtendMilestoneDeadline("job-1", validClientAddress, 1, -3600);
+      }).toThrow(ValidationError);
+    });
+
     it("should reject invalid milestoneId in prepareCancelExpiredMilestone", () => {
       expect(() => {
         client.prepareCancelExpiredMilestone("job-1", validClientAddress, -1);

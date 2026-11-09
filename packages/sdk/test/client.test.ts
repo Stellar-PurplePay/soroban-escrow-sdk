@@ -272,5 +272,24 @@ describe("EscrowClient", () => {
         networkPassphrase: "Test SDF Network ; September 2015",
       });
     });
+
+    it("should probe contract health and return positive report on valid RPC response", async () => {
+      const mockFetcher = jest.fn().mockResolvedValue({
+        result: { sequence: 987654 },
+      });
+
+      const report = await client.getContractHealth(mockFetcher);
+      expect(report.isResponsive).toBe(true);
+      expect(report.latestLedgerSequence).toBe(987654);
+      expect(report.contractId).toBe(client.contractId);
+    });
+
+    it("should handle RPC failure in getContractHealth", async () => {
+      const mockFetcher = jest.fn().mockRejectedValue(new Error("RPC Timeout"));
+
+      const report = await client.getContractHealth(mockFetcher);
+      expect(report.isResponsive).toBe(false);
+      expect(report.error).toBe("RPC Timeout");
+    });
   });
 });

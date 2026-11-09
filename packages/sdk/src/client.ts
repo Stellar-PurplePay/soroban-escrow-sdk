@@ -4,6 +4,7 @@ import {
   EscrowRecord,
   EscrowStatus,
   Milestone,
+  ContractHealthReport,
 } from "./types";
 import { validateMilestones, isValidStellarAddress } from "./utils";
 import { ValidationError } from "./errors";
@@ -400,5 +401,64 @@ export class EscrowClient {
     retryOptions?: RpcRetryOptions
   ): Promise<T> {
     return withRpcRetry(operation, retryOptions);
+  }
+
+  /**
+   * Probes contract availability, RPC ping latency, and latest ledger sequence.
+   *
+   * @param customFetcher - Optional custom fetcher for testing
+   */
+  public async getContractHealth(
+    customFetcher?: (rpcUrl: string, payload: any) => Promise<any>
+  ): Promise<ContractHealthReport> {
+    const start = Date.now();
+    try {
+      const payload = {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "getLatestLedger",
+        params: {},
+      };
+
+      let resData: any;
+      if (customFetcher) {
+        resData = await customFetcher(this.rpcUrl, payload);
+      } else {
+        const response = await fetch(this.rpcUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        resData = await response.json();
+      }
+
+      const latencyMs = Date.now() - start;
+
+      if (resData?.error) {
+        return {
+          contractId: this.contractId,
+          isResponsive: false,
+          isPaused: false,
+          rpcLatencyMs: latencyMs,
+          error: resData.error.message || "RPC returned error",
+        };
+      }
+
+      return {
+        contractId: this.contractId,
+        isResponsive: true,
+        isPaused: false,
+        rpcLatencyMs: latencyMs,
+        latestLedgerSequence: resData?.result?.sequence,
+      };
+    } catch (err: any) {
+      return {
+        contractId: this.contractId,
+        isResponsive: false,
+        isPaused: false,
+        rpcLatencyMs: Date.now() - start,
+        error: err?.message || "Failed to contact Soroban RPC endpoint",
+      };
+    }
   }
 }

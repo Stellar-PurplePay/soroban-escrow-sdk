@@ -68,3 +68,12 @@ export interface EscrowProgress {
   percentageReleased: number;
   status: EscrowStatus;
 }
+
+export interface ContractHealthReport {
+  contractId: string;
+  isResponsive: boolean;
+  isPaused: boolean;
+  rpcLatencyMs: number;
+  latestLedgerSequence?: number;
+  error?: string;
+}

@@ -426,6 +426,45 @@ impl EscrowContract {
         Ok(())
     }
 
+    /// Mutual cancellation and refund of remaining funds while InProgress (requires dual auth of client and freelancer).
+    pub fn mutual_cancel(env: Env, job_id: String) -> Result<(), EscrowError> {
+        ensure_not_paused(&env)?;
+
+        let escrow_key = DataKey::Escrow(job_id.clone());
+        let mut escrow: Escrow = env
+            .storage()
+            .persistent()
+            .get(&escrow_key)
+            .ok_or(EscrowError::EscrowNotFound)?;
+
+        escrow.client.require_auth();
+        escrow.freelancer.require_auth();
+
+        if escrow.status != EscrowStatus::InProgress {
+            return Err(EscrowError::InvalidStatus);
+        }
+
+        let remaining = escrow.total_amount - escrow.released_amount;
+        escrow.status = if escrow.released_amount > 0 {
+            EscrowStatus::Completed
+        } else {
+            EscrowStatus::Refunded
+        };
+        env.storage().persistent().set(&escrow_key, &escrow);
+
+        if remaining > 0 {
+            let token_client = token::Client::new(&env, &escrow.token);
+            token_client.transfer(&env.current_contract_address(), &escrow.client, &remaining);
+        }
+
+        env.events().publish(
+            (symbol_short!("escrow"), symbol_short!("mut_canc")),
+            (job_id, remaining),
+        );
+
+        Ok(())
+    }
+
     /// Permissionless timeout refund: anyone can invoke this to return remaining funds to the client
     /// once the ledger timestamp exceeds the timeout deadline and the work is unfinished.
     pub fn claim_timeout_refund(env: Env, job_id: String) -> Result<(), EscrowError> {

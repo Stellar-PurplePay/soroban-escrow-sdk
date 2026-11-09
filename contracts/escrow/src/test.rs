@@ -448,3 +448,45 @@ fn test_emergency_pause_and_unpause_circuit_breaker() {
     let res_after = escrow_client.try_create_escrow(&job_id, &client, &params, &Vec::new(&env));
     assert!(res_after.is_ok());
 }
+
+#[test]
+fn test_mutual_cancellation_while_in_progress() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        _treasury,
+        client,
+        freelancer,
+        arbitrator,
+        token_client,
+        _token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let job_id = String::from_str(&env, "job-mutual-cancel");
+    let timeout = env.ledger().timestamp() + 3600;
+    let initial_balance = 1_000_000;
+
+    let params = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address.clone(),
+        total_amount: initial_balance,
+        timeout_timestamp: timeout,
+        arbitrator: arbitrator.clone(),
+    };
+
+    escrow_client.create_escrow(&job_id, &client, &params, &Vec::new(&env));
+    escrow_client.start_work(&job_id, &freelancer);
+
+    // Mutual cancel by client and freelancer
+    escrow_client.mutual_cancel(&job_id);
+
+    let escrow = escrow_client.get_escrow(&job_id);
+    assert_eq!(escrow.status, EscrowStatus::Refunded);
+
+    // Client received remaining funds back
+    assert_eq!(token_client.balance(&client), 10_000_000);
+}

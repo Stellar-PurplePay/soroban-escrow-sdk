@@ -95,4 +95,9 @@ impl EscrowEvents {
         env.events()
             .publish((symbol_short!("escrow"), symbol_short!("ms_canc")), (job_id, milestone_id, refund_amount));
     }
+
+    pub fn milestone_deadline_extended(env: &Env, job_id: String, milestone_id: u32, new_deadline: u64) {
+        env.events()
+            .publish((symbol_short!("escrow"), symbol_short!("ms_ext")), (job_id, milestone_id, new_deadline));
+    }
 }

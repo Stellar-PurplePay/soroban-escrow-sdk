@@ -1110,4 +1110,47 @@ impl EscrowContract {
         EscrowEvents::milestone_cancelled(&env, job_id, milestone_id, refund_amount);
         Ok(())
     }
+
+    /// Extends an unapproved milestone deadline by a specified number of seconds.
+    pub fn extend_milestone_deadline(
+        env: Env,
+        job_id: String,
+        client: Address,
+        milestone_id: u32,
+        extension_seconds: u64,
+    ) -> Result<u64, EscrowError> {
+        ensure_not_paused(&env)?;
+        client.require_auth();
+
+        let escrow = Self::get_escrow(env.clone(), job_id.clone())?;
+        if escrow.client != client {
+            return Err(EscrowError::Unauthorized);
+        }
+
+        if escrow.status != EscrowStatus::InProgress && escrow.status != EscrowStatus::Created {
+            return Err(EscrowError::InvalidStatus);
+        }
+
+        let milestone = Self::get_milestone(env.clone(), job_id.clone(), milestone_id)?;
+        if milestone.approved {
+            return Err(EscrowError::MilestoneAlreadyApproved);
+        }
+
+        if extension_seconds == 0 || extension_seconds > 31_536_000 {
+            return Err(EscrowError::InvalidDeadline);
+        }
+
+        let now = env.ledger().timestamp();
+        let current_dl = Self::get_milestone_deadline(env.clone(), job_id.clone(), milestone_id).unwrap_or(now);
+        let base = if current_dl > now { current_dl } else { now };
+        let new_deadline = base + extension_seconds;
+
+        extend_storage_ttl(&env, &job_id);
+        let key = DataKey::MilestoneDeadline(job_id.clone(), milestone_id);
+        env.storage().persistent().set(&key, &new_deadline);
+        env.storage().persistent().extend_ttl(&key, 100_000, 200_000);
+
+        EscrowEvents::milestone_deadline_extended(&env, job_id, milestone_id, new_deadline);
+        Ok(new_deadline)
+    }
 }

@@ -1074,3 +1074,61 @@ fn test_cancel_expired_milestone_refund() {
     let double_cancel = escrow_client.try_cancel_expired_milestone(&job_id, &client, &1);
     assert_eq!(double_cancel, Err(Ok(EscrowError::MilestoneAlreadyApproved)));
 }
+
+#[test]
+fn test_extend_milestone_deadline() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        _treasury,
+        client,
+        freelancer,
+        arbitrator,
+        _token_client,
+        _token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let job_id = String::from_str(&env, "job-extend-dl");
+    let base_time = env.ledger().timestamp();
+    let timeout = base_time + 50_000;
+
+    let params = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address,
+        total_amount: 1_000_000,
+        timeout_timestamp: timeout,
+        arbitrator: arbitrator.clone(),
+    };
+
+    let mut milestones = Vec::new(&env);
+    milestones.push_back(MilestoneInput {
+        description: String::from_str(&env, "Deliverable"),
+        percentage: 100,
+    });
+
+    escrow_client.create_escrow(&job_id, &client, &params, &milestones);
+    escrow_client.start_work(&job_id, &freelancer);
+
+    // Initial deadline
+    let initial_dl = base_time + 2000;
+    escrow_client.set_milestone_deadline(&job_id, &client, &1, &initial_dl);
+    assert_eq!(escrow_client.get_milestone_deadline(&job_id, &1), Some(initial_dl));
+
+    // Zero seconds extension fails
+    let zero_ext = escrow_client.try_extend_milestone_deadline(&job_id, &client, &1, &0);
+    assert_eq!(zero_ext, Err(Ok(EscrowError::InvalidDeadline)));
+
+    // Client extends deadline by 1500 seconds
+    let new_dl = escrow_client.extend_milestone_deadline(&job_id, &client, &1, &1500);
+    assert_eq!(new_dl, initial_dl + 1500);
+    assert_eq!(escrow_client.get_milestone_deadline(&job_id, &1), Some(initial_dl + 1500));
+
+    // Non-client cannot extend
+    let non_client = Address::generate(&env);
+    let unauthorized = escrow_client.try_extend_milestone_deadline(&job_id, &non_client, &1, &1000);
+    assert_eq!(unauthorized, Err(Ok(EscrowError::Unauthorized)));
+}

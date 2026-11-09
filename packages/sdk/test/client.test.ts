@@ -25,6 +25,13 @@ describe("EscrowClient", () => {
       expect(client.rpcUrl).toBe(mockConfig.rpcUrl);
       expect(client.networkPassphrase).toBe(mockConfig.networkPassphrase);
       expect(client.contractId).toBe(mockConfig.contractId);
+      expect(client.getCircuitBreaker()).not.toBeNull();
+      expect(client.getCircuitBreaker()?.getState()).toBe("CLOSED");
+    });
+
+    it("should allow disabling circuit breaker via config", () => {
+      const noCbClient = new EscrowClient({ ...mockConfig, circuitBreaker: false });
+      expect(noCbClient.getCircuitBreaker()).toBeNull();
     });
 
     it("should throw error if config parameters are missing", () => {

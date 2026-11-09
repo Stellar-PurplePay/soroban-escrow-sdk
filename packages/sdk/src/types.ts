@@ -1,3 +1,5 @@
+import type { CircuitBreakerOptions } from "./rpcCircuitBreaker";
+
 export enum EscrowStatus {
   Created = "Created",
   InProgress = "InProgress",
@@ -47,6 +49,7 @@ export interface EscrowConfig {
   rpcUrl: string;
   networkPassphrase: string;
   contractId: string;
+  circuitBreaker?: CircuitBreakerOptions | false;
 }
 
 export interface SimulationResult<T> {

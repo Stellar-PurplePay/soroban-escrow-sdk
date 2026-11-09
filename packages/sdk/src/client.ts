@@ -19,11 +19,13 @@ import {
   PartitionOptions,
 } from "./batchPayment";
 import { toStroops, fromStroops } from "./utils/stroopPrecision";
+import { RpcCircuitBreaker } from "./rpcCircuitBreaker";
 
 export class EscrowClient {
   public readonly rpcUrl: string;
   public readonly networkPassphrase: string;
   public readonly contractId: string;
+  private readonly circuitBreaker: RpcCircuitBreaker | null;
 
   constructor(config: EscrowConfig) {
     if (!config.rpcUrl) {
@@ -39,6 +41,14 @@ export class EscrowClient {
     this.rpcUrl = config.rpcUrl;
     this.networkPassphrase = config.networkPassphrase;
     this.contractId = config.contractId;
+    this.circuitBreaker =
+      config.circuitBreaker === false
+        ? null
+        : new RpcCircuitBreaker(config.circuitBreaker || {});
+  }
+
+  public getCircuitBreaker(): RpcCircuitBreaker | null {
+    return this.circuitBreaker;
   }
 
   /**
@@ -691,16 +701,23 @@ export class EscrowClient {
         params: {},
       };
 
-      let resData: any;
-      if (customFetcher) {
-        resData = await customFetcher(this.rpcUrl, payload);
-      } else {
+      const executeCall = async () => {
+        if (customFetcher) {
+          return await customFetcher(this.rpcUrl, payload);
+        }
         const response = await fetch(this.rpcUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
-        resData = await response.json();
+        return await response.json();
+      };
+
+      let resData: any;
+      if (this.circuitBreaker) {
+        resData = await this.circuitBreaker.execute(executeCall);
+      } else {
+        resData = await executeCall();
       }
 
       const latencyMs = Date.now() - start;

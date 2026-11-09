@@ -169,4 +169,52 @@ describe("RpcCircuitBreaker", () => {
     expect(report.failureRatePercentage).toBe(66.67);
     expect(report.stateTransitions).toHaveLength(1);
   });
+
+  it("verifies accounting invariants across randomized execution and error sequences", async () => {
+    const cb = new RpcCircuitBreaker({
+      failureThreshold: 3,
+      resetTimeoutMs: 1000,
+      halfOpenSuccessThreshold: 2,
+    });
+
+    let expectedSuccesses = 0;
+    let expectedFailures = 0;
+    let expectedShortCircuits = 0;
+
+    for (let i = 0; i < 50; i++) {
+      const willSucceed = Math.random() > 0.4;
+
+      if (cb.getState() === "OPEN") {
+        try {
+          await cb.execute(async () => "blocked");
+        } catch (err: any) {
+          if (err instanceof CircuitBreakerOpenError) {
+            expectedShortCircuits++;
+          }
+        }
+        // Advance timer to half-open
+        jest.advanceTimersByTime(1001);
+      } else {
+        if (willSucceed) {
+          await cb.execute(async () => "success");
+          expectedSuccesses++;
+        } else {
+          try {
+            await cb.execute(async () => {
+              throw new Error("Simulated failure");
+            });
+          } catch (err: any) {
+            if (!(err instanceof CircuitBreakerOpenError)) {
+              expectedFailures++;
+            }
+          }
+        }
+      }
+    }
+
+    const report = cb.getDetailedReport();
+    expect(report.totalExecutions).toBe(expectedSuccesses + expectedFailures);
+    expect(report.totalFailures).toBe(expectedFailures);
+    expect(report.totalShortCircuited).toBe(expectedShortCircuits);
+  });
 });

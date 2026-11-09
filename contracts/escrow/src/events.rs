@@ -80,4 +80,9 @@ impl EscrowEvents {
         env.events()
             .publish((symbol_short!("arb"), symbol_short!("slashed")), (arbitrator, recipient, slash_amount));
     }
+
+    pub fn evidence_submitted(env: &Env, job_id: String, caller: Address, evidence_hash: BytesN<32>) {
+        env.events()
+            .publish((symbol_short!("escrow"), symbol_short!("evidence")), (job_id, caller, evidence_hash));
+    }
 }

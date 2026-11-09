@@ -678,6 +678,42 @@ impl EscrowContract {
         Ok(())
     }
 
+    /// Submit cryptographic proof/evidence hash for an active dispute (client or freelancer).
+    pub fn submit_dispute_evidence(
+        env: Env,
+        job_id: String,
+        caller: Address,
+        evidence_hash: BytesN<32>,
+    ) -> Result<(), EscrowError> {
+        ensure_not_paused(&env)?;
+        caller.require_auth();
+
+        let escrow_key = DataKey::Escrow(job_id.clone());
+        let escrow: Escrow = env
+            .storage()
+            .persistent()
+            .get(&escrow_key)
+            .ok_or(EscrowError::EscrowNotFound)?;
+
+        if caller != escrow.client && caller != escrow.freelancer {
+            return Err(EscrowError::Unauthorized);
+        }
+
+        if escrow.status != EscrowStatus::Disputed {
+            return Err(EscrowError::EscrowNotDisputed);
+        }
+
+        env.storage().persistent().set(
+            &DataKey::DisputeEvidence(job_id.clone(), caller.clone()),
+            &evidence_hash,
+        );
+        extend_storage_ttl(&env, &job_id);
+
+        EscrowEvents::evidence_submitted(&env, job_id, caller, evidence_hash);
+
+        Ok(())
+    }
+
     /// Arbitrator resolves a disputed escrow by allocating remaining funds between client and freelancer.
     pub fn resolve_dispute(
         env: Env,
@@ -920,5 +956,17 @@ impl EscrowContract {
             .persistent()
             .get(&DataKey::ArbitratorBond(arbitrator))
             .unwrap_or(0)
+    }
+
+    /// Get dispute evidence hash submitted by a specific party.
+    pub fn get_dispute_evidence(
+        env: Env,
+        job_id: String,
+        caller: Address,
+    ) -> Result<BytesN<32>, EscrowError> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::DisputeEvidence(job_id, caller))
+            .ok_or(EscrowError::EscrowNotFound)
     }
 }

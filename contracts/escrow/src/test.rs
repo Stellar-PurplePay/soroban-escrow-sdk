@@ -885,3 +885,63 @@ fn test_arbitrator_bond_slashing_mechanism() {
     assert_eq!(escrow_client.get_arbitrator_bond(&arbitrator), 300_000);
     assert_eq!(token_client.balance(&client) - client_initial, 200_000);
 }
+
+#[test]
+fn test_dispute_evidence_submission_and_query() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        _treasury,
+        client,
+        freelancer,
+        arbitrator,
+        _token_client,
+        _token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let job_id = String::from_str(&env, "job-evidence-test");
+    let timeout = env.ledger().timestamp() + 10_000;
+
+    let params = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address,
+        total_amount: 500_000,
+        timeout_timestamp: timeout,
+        arbitrator: arbitrator.clone(),
+    };
+
+    let mut milestones = Vec::new(&env);
+    milestones.push_back(MilestoneInput {
+        description: String::from_str(&env, "Full Job"),
+        percentage: 100,
+    });
+
+    escrow_client.create_escrow(&job_id, &client, &params, &milestones);
+    escrow_client.start_work(&job_id, &freelancer);
+
+    // Cannot submit evidence before dispute is raised
+    let client_hash = BytesN::from_array(&env, &[0xaa; 32]);
+    let pre_dispute_res = escrow_client.try_submit_dispute_evidence(&job_id, &client, &client_hash);
+    assert_eq!(pre_dispute_res, Err(Ok(EscrowError::EscrowNotDisputed)));
+
+    // Client raises dispute
+    escrow_client.raise_dispute(&job_id, &client);
+
+    // Client submits evidence
+    escrow_client.submit_dispute_evidence(&job_id, &client, &client_hash);
+    assert_eq!(escrow_client.get_dispute_evidence(&job_id, &client), client_hash);
+
+    // Freelancer submits rebuttal evidence
+    let freelancer_hash = BytesN::from_array(&env, &[0xbb; 32]);
+    escrow_client.submit_dispute_evidence(&job_id, &freelancer, &freelancer_hash);
+    assert_eq!(escrow_client.get_dispute_evidence(&job_id, &freelancer), freelancer_hash);
+
+    // Unauthorized non-party fails
+    let outsider = Address::generate(&env);
+    let outsider_res = escrow_client.try_submit_dispute_evidence(&job_id, &outsider, &client_hash);
+    assert_eq!(outsider_res, Err(Ok(EscrowError::Unauthorized)));
+}

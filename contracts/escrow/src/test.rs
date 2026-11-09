@@ -2045,3 +2045,53 @@ fn test_dispute_cooling_off_enforcement() {
     let escrow = escrow_client.get_escrow(&job_id);
     assert_eq!(escrow.status, EscrowStatus::Completed);
 }
+
+#[test]
+fn test_emergency_freeze_notice_period_and_unfreeze() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        _treasury,
+        _client,
+        _freelancer,
+        _arbitrator,
+        _token_client,
+        _token_admin,
+        _token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    // Initial status: not frozen
+    let (active, unlock_ts) = escrow_client.get_emergency_freeze_status();
+    assert_eq!(active, false);
+    assert_eq!(unlock_ts, 0);
+
+    let now = env.ledger().timestamp();
+    // Request emergency freeze with 100 seconds (clamped to 86_400 minimum notice)
+    let unlock_expected = escrow_client.request_emergency_freeze(&100);
+    assert_eq!(unlock_expected, now + 86_400);
+
+    let (active_after, unlock_after) = escrow_client.get_emergency_freeze_status();
+    assert_eq!(active_after, true);
+    assert_eq!(unlock_after, now + 86_400);
+
+    // Attempt unfreeze before notice period elapses
+    let premature_unfreeze = escrow_client.try_execute_emergency_unfreeze();
+    assert_eq!(premature_unfreeze.err(), Some(Ok(EscrowError::FreezePeriodNotExpired)));
+
+    // Advance halfway through notice period (43,200 seconds)
+    env.ledger().with_mut(|li| li.timestamp += 43_200);
+    let still_premature = escrow_client.try_execute_emergency_unfreeze();
+    assert_eq!(still_premature.err(), Some(Ok(EscrowError::FreezePeriodNotExpired)));
+
+    // Advance beyond notice period (+45,000 seconds)
+    env.ledger().with_mut(|li| li.timestamp += 45_000);
+
+    // Unfreeze succeeds
+    escrow_client.execute_emergency_unfreeze();
+    let (active_final, unlock_final) = escrow_client.get_emergency_freeze_status();
+    assert_eq!(active_final, false);
+    assert_eq!(unlock_final, 0);
+}

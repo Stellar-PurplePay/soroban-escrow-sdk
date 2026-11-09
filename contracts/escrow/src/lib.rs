@@ -1,7 +1,7 @@
 #![no_std]
 #![allow(deprecated)]
 
-use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{contract, contractimpl, symbol_short, token, Address, BytesN, Env, String, Symbol, Vec};
 
 mod errors;
 mod events;
@@ -54,6 +54,18 @@ fn next_receipt_id(env: &Env) -> u64 {
     let next = current + 1;
     env.storage().instance().set(&DataKey::ReceiptCounter, &next);
     next
+}
+
+fn enforce_action_throttle(env: &Env, action: Symbol, min_interval_seconds: u64) -> Result<(), EscrowError> {
+    let key = DataKey::AdminActionThrottle(action);
+    let now = env.ledger().timestamp();
+    if let Some(last_time) = env.storage().instance().get::<_, u64>(&key) {
+        if now < last_time + min_interval_seconds {
+            return Err(EscrowError::RateLimitExceeded);
+        }
+    }
+    env.storage().instance().set(&key, &now);
+    Ok(())
 }
 
 #[contract]
@@ -128,7 +140,7 @@ impl EscrowContract {
         Ok(())
     }
 
-    /// Update platform treasury recipient address (admin only).
+    /// Update platform treasury recipient address (admin only, throttled to 300s minimum interval).
     pub fn set_treasury(env: Env, new_treasury: Address) -> Result<(), EscrowError> {
         let admin: Address = env
             .storage()
@@ -136,6 +148,8 @@ impl EscrowContract {
             .get(&DataKey::Admin)
             .ok_or(EscrowError::NotInitialized)?;
         admin.require_auth();
+
+        enforce_action_throttle(&env, symbol_short!("treasury"), 300)?;
 
         env.storage().instance().set(&DataKey::Treasury, &new_treasury);
         EscrowEvents::set_treasury(&env, new_treasury);

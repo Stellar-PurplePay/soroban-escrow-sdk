@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, String};
+use soroban_sdk::{contracttype, Address, String, Symbol};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -86,4 +86,5 @@ pub enum DataKey {
     MilestoneDeadline(String, u32),
     MilestoneReleased(String, u32),
     ReceiptCounter,
+    AdminActionThrottle(Symbol),
 }

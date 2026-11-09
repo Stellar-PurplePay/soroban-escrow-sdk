@@ -543,8 +543,14 @@ impl EscrowContract {
         let fee_bps: u32 = env.storage().instance().get(&DataKey::FeeBps).unwrap_or(0);
         let treasury: Option<Address> = env.storage().instance().get(&DataKey::Treasury);
 
-        let fee = (release_amount * (fee_bps as i128)) / 10_000;
-        let freelancer_payout = release_amount - fee;
+        let fee = release_amount
+            .checked_mul(fee_bps as i128)
+            .ok_or(EscrowError::InvalidAmount)?
+            .checked_div(10_000)
+            .ok_or(EscrowError::InvalidAmount)?;
+        let freelancer_payout = release_amount
+            .checked_sub(fee)
+            .ok_or(EscrowError::InvalidAmount)?;
 
         let token_client = token::Client::new(&env, &escrow.token);
 
@@ -898,8 +904,14 @@ impl EscrowContract {
         let fee_bps: u32 = env.storage().instance().get(&DataKey::FeeBps).unwrap_or(0);
         let treasury: Option<Address> = env.storage().instance().get(&DataKey::Treasury);
 
-        let fee = (freelancer_award * (fee_bps as i128)) / 10_000;
-        let freelancer_payout = freelancer_award - fee;
+        let fee = freelancer_award
+            .checked_mul(fee_bps as i128)
+            .ok_or(EscrowError::InvalidAmount)?
+            .checked_div(10_000)
+            .ok_or(EscrowError::InvalidAmount)?;
+        let freelancer_payout = freelancer_award
+            .checked_sub(fee)
+            .ok_or(EscrowError::InvalidAmount)?;
 
         let token_client = token::Client::new(env, &escrow.token);
 
@@ -1293,11 +1305,17 @@ impl EscrowContract {
             .ok_or(EscrowError::NotInitialized)?;
 
         let fee_amount = if fee_bps > 0 {
-            (amount * (fee_bps as i128)) / 10_000
+            amount
+                .checked_mul(fee_bps as i128)
+                .ok_or(EscrowError::InvalidAmount)?
+                .checked_div(10_000)
+                .ok_or(EscrowError::InvalidAmount)?
         } else {
             0
         };
-        let freelancer_payout = amount - fee_amount;
+        let freelancer_payout = amount
+            .checked_sub(fee_amount)
+            .ok_or(EscrowError::InvalidAmount)?;
 
         let token_client = token::Client::new(&env, &escrow.token);
         if fee_amount > 0 {
@@ -1309,7 +1327,9 @@ impl EscrowContract {
             &freelancer_payout,
         );
 
-        let new_released = previously_released + amount;
+        let new_released = previously_released
+            .checked_add(amount)
+            .ok_or(EscrowError::InvalidAmount)?;
         env.storage().persistent().set(&released_key, &new_released);
         env.storage().persistent().extend_ttl(&released_key, 100_000, 200_000);
 

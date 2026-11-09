@@ -11,6 +11,12 @@ import { ValidationError } from "./errors";
 import { parseResourceEstimate, ResourceCost, ResourceBudgetLimits } from "./estimator";
 import { signWithFreighter, FreighterSignOptions, FreighterApi } from "./freighter";
 import { withRpcRetry, RpcRetryOptions } from "./rpcRetry";
+import {
+  partitionPayments,
+  PaymentItem,
+  BatchPaymentSummary,
+  PartitionOptions,
+} from "./batchPayment";
 
 export class EscrowClient {
   public readonly rpcUrl: string;
@@ -557,5 +563,19 @@ export class EscrowClient {
         error: err?.message || "Failed to contact Soroban RPC endpoint",
       };
     }
+  }
+
+  /**
+   * Partitions batch payment payouts conforming to the Stellar transaction operation limits.
+   *
+   * @param payments - List of payment instructions
+   * @param options - Chunk partitioning and fee options
+   * @returns Partitioned batch summary
+   */
+  public prepareBatchPayments(
+    payments: PaymentItem[],
+    options?: PartitionOptions
+  ): BatchPaymentSummary {
+    return partitionPayments(payments, options);
   }
 }

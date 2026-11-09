@@ -8,4 +8,5 @@ export * from "./estimator";
 export * from "./rpcRetry";
 export * from "./hooks/useEscrowState";
 export * from "./utils/stroopPrecision";
+export * from "./batchPayment";
 export * from "./client";

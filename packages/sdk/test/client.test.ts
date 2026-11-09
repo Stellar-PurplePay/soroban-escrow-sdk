@@ -345,5 +345,18 @@ describe("EscrowClient", () => {
       expect(report.isResponsive).toBe(false);
       expect(report.error).toBe("RPC Timeout");
     });
+
+    it("should partition batch payments through prepareBatchPayments", () => {
+      const summary = client.prepareBatchPayments([
+        { destination: validClientAddress, amount: "25.0000000" },
+        { destination: validFreelancerAddress, amount: "75.0000000" },
+      ]);
+
+      expect(summary.totalPayments).toBe(2);
+      expect(summary.totalOperations).toBe(2);
+      expect(summary.totalAmountStroops).toBe(1000000000n);
+      expect(summary.totalAmountXlm).toBe("100.0000000");
+      expect(summary.chunks).toHaveLength(1);
+    });
   });
 });

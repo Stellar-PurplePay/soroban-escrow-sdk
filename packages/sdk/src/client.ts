@@ -243,4 +243,55 @@ export class EscrowClient {
       },
     };
   }
+
+  /**
+   * Prepare parameters for updating platform fee bps (admin only).
+   */
+  public prepareSetFeeBps(feeBps: number) {
+    if (!Number.isInteger(feeBps) || feeBps < 0 || feeBps > 1000) {
+      throw new ValidationError("feeBps must be an integer between 0 and 1000 (max 10.00%)");
+    }
+
+    return {
+      contractId: this.contractId,
+      method: "set_fee_bps",
+      args: {
+        fee_bps: feeBps,
+      },
+    };
+  }
+
+  /**
+   * Prepare parameters for rotating treasury recipient address (admin only).
+   */
+  public prepareSetTreasury(newTreasuryAddress: string) {
+    if (!isValidStellarAddress(newTreasuryAddress)) {
+      throw new ValidationError(`Invalid treasury address: ${newTreasuryAddress}`);
+    }
+
+    return {
+      contractId: this.contractId,
+      method: "set_treasury",
+      args: {
+        new_treasury: newTreasuryAddress,
+      },
+    };
+  }
+
+  /**
+   * Prepare parameters for transferring admin rights (admin only).
+   */
+  public prepareSetAdmin(newAdminAddress: string) {
+    if (!isValidStellarAddress(newAdminAddress)) {
+      throw new ValidationError(`Invalid new admin address: ${newAdminAddress}`);
+    }
+
+    return {
+      contractId: this.contractId,
+      method: "set_admin",
+      args: {
+        new_admin: newAdminAddress,
+      },
+    };
+  }
 }

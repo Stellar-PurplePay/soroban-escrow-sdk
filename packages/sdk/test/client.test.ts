@@ -189,5 +189,26 @@ describe("EscrowClient", () => {
       expect(payload.method).toBe("mutual_cancel");
       expect(payload.args.job_id).toBe("job-mutual");
     });
+
+    it("should prepare valid set_fee_bps payload within 1000 bps ceiling", () => {
+      const payload = client.prepareSetFeeBps(300);
+      expect(payload.method).toBe("set_fee_bps");
+      expect(payload.args.fee_bps).toBe(300);
+      expect(() => client.prepareSetFeeBps(1001)).toThrow(/feeBps must be an integer between 0 and 1000/);
+    });
+
+    it("should prepare valid set_treasury payload with validated address", () => {
+      const payload = client.prepareSetTreasury(validClientAddress);
+      expect(payload.method).toBe("set_treasury");
+      expect(payload.args.new_treasury).toBe(validClientAddress);
+      expect(() => client.prepareSetTreasury("bad-address")).toThrow(/Invalid treasury address/);
+    });
+
+    it("should prepare valid set_admin payload with validated address", () => {
+      const payload = client.prepareSetAdmin(validFreelancerAddress);
+      expect(payload.method).toBe("set_admin");
+      expect(payload.args.new_admin).toBe(validFreelancerAddress);
+      expect(() => client.prepareSetAdmin("bad-address")).toThrow(/Invalid new admin address/);
+    });
   });
 });

@@ -76,6 +76,11 @@ impl EscrowEvents {
             .publish((symbol_short!("arb"), symbol_short!("bonded")), (arbitrator, bond_amount));
     }
 
+    pub fn arbitrator_bond_withdrawn(env: &Env, arbitrator: Address, amount_withdrawn: i128, remaining_bond: i128) {
+        env.events()
+            .publish((symbol_short!("arb"), symbol_short!("withdrwn")), (arbitrator, amount_withdrawn, remaining_bond));
+    }
+
     pub fn arbitrator_bond_slashed(env: &Env, arbitrator: Address, recipient: Address, slash_amount: i128) {
         env.events()
             .publish((symbol_short!("arb"), symbol_short!("slashed")), (arbitrator, recipient, slash_amount));
@@ -128,5 +133,10 @@ impl EscrowEvents {
             (symbol_short!("escrow"), symbol_short!("receipt")),
             (receipt_id, job_id, milestone_id, recipient, amount, fee),
         );
+    }
+
+    pub fn escrow_archived(env: &Env, job_id: String) {
+        env.events()
+            .publish((symbol_short!("escrow"), symbol_short!("archived")), job_id);
     }
 }

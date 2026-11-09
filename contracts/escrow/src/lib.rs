@@ -201,6 +201,42 @@ impl EscrowContract {
         Ok(())
     }
 
+    /// Withdraw a portion or all of an arbitrator's bonded stake.
+    pub fn withdraw_arbitrator_bond(
+        env: Env,
+        arbitrator: Address,
+        token: Address,
+        amount: i128,
+    ) -> Result<(), EscrowError> {
+        ensure_not_paused(&env)?;
+        arbitrator.require_auth();
+
+        if amount <= 0 {
+            return Err(EscrowError::InvalidAmount);
+        }
+
+        let bond_key = DataKey::ArbitratorBond(arbitrator.clone());
+        let current_bond: i128 = env.storage().persistent().get(&bond_key).unwrap_or(0);
+
+        if amount > current_bond {
+            return Err(EscrowError::InvalidAmount);
+        }
+
+        let token_client = token::Client::new(&env, &token);
+        token_client.transfer(&env.current_contract_address(), &arbitrator, &amount);
+
+        let new_total = current_bond - amount;
+        if new_total == 0 {
+            env.storage().persistent().remove(&bond_key);
+        } else {
+            env.storage().persistent().set(&bond_key, &new_total);
+        }
+
+        EscrowEvents::arbitrator_bond_withdrawn(&env, arbitrator, amount, new_total);
+
+        Ok(())
+    }
+
     /// Slash an arbitrator's bond for proven misconduct and transfer penalty to recipient (admin only).
     pub fn slash_arbitrator_bond(
         env: Env,
@@ -736,6 +772,9 @@ impl EscrowContract {
 
         escrow.status = EscrowStatus::Disputed;
         env.storage().persistent().set(&escrow_key, &escrow);
+        env.storage()
+            .persistent()
+            .set(&DataKey::DisputeTimestamp(job_id.clone()), &env.ledger().timestamp());
         extend_storage_ttl(&env, &job_id);
 
         EscrowEvents::dispute_raised(&env, job_id, caller);
@@ -805,6 +844,18 @@ impl EscrowContract {
             return Err(EscrowError::EscrowNotDisputed);
         }
 
+        let cooldown: u64 = env.storage().instance().get(&DataKey::DisputeCooldown).unwrap_or(0);
+        if cooldown > 0 {
+            let dispute_time: u64 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::DisputeTimestamp(job_id.clone()))
+                .unwrap_or(0);
+            if env.ledger().timestamp() < dispute_time + cooldown {
+                return Err(EscrowError::RateLimitExceeded);
+            }
+        }
+
         let remaining = escrow.total_amount - escrow.released_amount;
         if client_award < 0
             || freelancer_award < 0
@@ -837,6 +888,18 @@ impl EscrowContract {
 
         if escrow.status != EscrowStatus::Disputed {
             return Err(EscrowError::EscrowNotDisputed);
+        }
+
+        let cooldown: u64 = env.storage().instance().get(&DataKey::DisputeCooldown).unwrap_or(0);
+        if cooldown > 0 {
+            let dispute_time: u64 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::DisputeTimestamp(job_id.clone()))
+                .unwrap_or(0);
+            if env.ledger().timestamp() < dispute_time + cooldown {
+                return Err(EscrowError::RateLimitExceeded);
+            }
         }
 
         let remaining = escrow.total_amount - escrow.released_amount;
@@ -1416,5 +1479,68 @@ impl EscrowContract {
         }
         let released = Self::get_milestone_released_amount(env, job_id, milestone_id);
         Ok(milestone.amount - released)
+    }
+
+    /// Archive a fully finalized escrow (status must be Completed or Refunded, with 0 residual balance).
+    pub fn archive_completed_escrow(env: Env, job_id: String) -> Result<(), EscrowError> {
+        ensure_not_paused(&env)?;
+
+        let escrow_key = DataKey::Escrow(job_id.clone());
+        let escrow: Escrow = env
+            .storage()
+            .persistent()
+            .get(&escrow_key)
+            .ok_or(EscrowError::EscrowNotFound)?;
+
+        if escrow.status != EscrowStatus::Completed && escrow.status != EscrowStatus::Refunded {
+            return Err(EscrowError::InvalidStatus);
+        }
+
+        if escrow.released_amount != escrow.total_amount {
+            return Err(EscrowError::InvalidAmount);
+        }
+
+        let milestones_key = DataKey::Milestones(job_id.clone());
+        env.storage().persistent().remove(&milestones_key);
+
+        let votes_key = DataKey::DisputeBallot(job_id.clone());
+        env.storage().persistent().remove(&votes_key);
+
+        EscrowEvents::escrow_archived(&env, job_id);
+
+        Ok(())
+    }
+
+    /// Set minimum cooling-off period required before an arbitrator can resolve a dispute (admin only).
+    pub fn set_dispute_cooldown(
+        env: Env,
+        admin: Address,
+        cooldown_seconds: u64,
+    ) -> Result<(), EscrowError> {
+        ensure_not_paused(&env)?;
+        admin.require_auth();
+
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(EscrowError::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(EscrowError::Unauthorized);
+        }
+
+        env.storage()
+            .instance()
+            .set(&DataKey::DisputeCooldown, &cooldown_seconds);
+
+        Ok(())
+    }
+
+    /// Query the configured dispute cooling-off period in seconds.
+    pub fn get_dispute_cooldown(env: Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::DisputeCooldown)
+            .unwrap_or(0)
     }
 }

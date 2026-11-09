@@ -402,3 +402,49 @@ fn test_milestone_validation_enforced() {
         escrow_client.try_create_escrow(&job_id, &client, &params, &empty_desc_milestones);
     assert_eq!(res_empty, Err(Ok(EscrowError::InvalidMilestoneData)));
 }
+
+#[test]
+fn test_emergency_pause_and_unpause_circuit_breaker() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        _treasury,
+        client,
+        freelancer,
+        arbitrator,
+        _token_client,
+        _token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    assert_eq!(escrow_client.is_paused(), false);
+
+    // 1. Pause contract
+    escrow_client.pause();
+    assert_eq!(escrow_client.is_paused(), true);
+
+    let job_id = String::from_str(&env, "job-paused");
+    let timeout = env.ledger().timestamp() + 3600;
+    let params = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address.clone(),
+        total_amount: 100_000,
+        timeout_timestamp: timeout,
+        arbitrator: arbitrator.clone(),
+    };
+
+    // 2. create_escrow must fail when paused
+    let res = escrow_client.try_create_escrow(&job_id, &client, &params, &Vec::new(&env));
+    assert_eq!(res, Err(Ok(EscrowError::ContractPaused)));
+
+    // 3. Unpause contract
+    escrow_client.unpause();
+    assert_eq!(escrow_client.is_paused(), false);
+
+    // 4. create_escrow succeeds once unpaused
+    let res_after = escrow_client.try_create_escrow(&job_id, &client, &params, &Vec::new(&env));
+    assert!(res_after.is_ok());
+}

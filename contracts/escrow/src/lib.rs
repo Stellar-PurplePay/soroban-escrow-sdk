@@ -24,6 +24,13 @@ fn validate_fee(fee_bps: u32) -> Result<(), EscrowError> {
     Ok(())
 }
 
+fn ensure_not_paused(env: &Env) -> Result<(), EscrowError> {
+    if env.storage().instance().get(&DataKey::Paused).unwrap_or(false) {
+        return Err(EscrowError::ContractPaused);
+    }
+    Ok(())
+}
+
 #[contract]
 pub struct EscrowContract;
 
@@ -45,9 +52,41 @@ impl EscrowContract {
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Treasury, &treasury);
         env.storage().instance().set(&DataKey::FeeBps, &fee_bps);
+        env.storage().instance().set(&DataKey::Paused, &false);
         env.storage().instance().extend_ttl(100_000, 200_000);
 
         Ok(())
+    }
+
+    /// Pause all state-mutating contract operations (admin only).
+    pub fn pause(env: Env) -> Result<(), EscrowError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(EscrowError::NotInitialized)?;
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Paused, &true);
+        env.events().publish((symbol_short!("pause"),), admin);
+        Ok(())
+    }
+
+    /// Resume paused contract operations (admin only).
+    pub fn unpause(env: Env) -> Result<(), EscrowError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(EscrowError::NotInitialized)?;
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Paused, &false);
+        env.events().publish((symbol_short!("unpause"),), admin);
+        Ok(())
+    }
+
+    /// Query whether the contract is currently paused.
+    pub fn is_paused(env: Env) -> bool {
+        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
     }
 
     /// Update platform fee basis points (admin only). 100 bps = 1.00%.
@@ -72,6 +111,7 @@ impl EscrowContract {
         params: CreateEscrowParams,
         milestones: Vec<MilestoneInput>,
     ) -> Result<(), EscrowError> {
+        ensure_not_paused(&env)?;
         client.require_auth();
 
         if params.total_amount <= 0 {
@@ -182,6 +222,7 @@ impl EscrowContract {
 
     /// Freelancer indicates work has commenced, transitioning status from Created to InProgress.
     pub fn start_work(env: Env, job_id: String, freelancer: Address) -> Result<(), EscrowError> {
+        ensure_not_paused(&env)?;
         freelancer.require_auth();
 
         let escrow_key = DataKey::Escrow(job_id.clone());
@@ -215,6 +256,7 @@ impl EscrowContract {
         freelancer: Address,
         deliverable_hash: BytesN<32>,
     ) -> Result<(), EscrowError> {
+        ensure_not_paused(&env)?;
         freelancer.require_auth();
 
         let escrow_key = DataKey::Escrow(job_id.clone());
@@ -251,6 +293,7 @@ impl EscrowContract {
         client: Address,
         milestone_id: u32,
     ) -> Result<(), EscrowError> {
+        ensure_not_paused(&env)?;
         client.require_auth();
 
         let escrow_key = DataKey::Escrow(job_id.clone());
@@ -432,6 +475,7 @@ impl EscrowContract {
 
     /// Raise a dispute on an active escrow (invoked by client or freelancer).
     pub fn raise_dispute(env: Env, job_id: String, caller: Address) -> Result<(), EscrowError> {
+        ensure_not_paused(&env)?;
         caller.require_auth();
 
         let escrow_key = DataKey::Escrow(job_id.clone());
@@ -468,6 +512,7 @@ impl EscrowContract {
         client_award: i128,
         freelancer_award: i128,
     ) -> Result<(), EscrowError> {
+        ensure_not_paused(&env)?;
         arbitrator.require_auth();
 
         let escrow_key = DataKey::Escrow(job_id.clone());

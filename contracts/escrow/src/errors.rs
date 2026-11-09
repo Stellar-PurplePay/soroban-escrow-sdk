@@ -22,4 +22,6 @@ pub enum EscrowError {
     InvalidFee = 16,
     InvalidMilestoneCount = 17,
     InvalidMilestoneData = 18,
+    ContractPaused = 19,
+    ContractNotPaused = 20,
 }

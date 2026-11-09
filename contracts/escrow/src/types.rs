@@ -58,6 +58,7 @@ pub enum DataKey {
     Admin,
     Treasury,
     FeeBps,
+    Paused,
     Escrow(String),
     Milestones(String),
     Deliverable(String),

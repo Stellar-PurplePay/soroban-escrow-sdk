@@ -1389,3 +1389,112 @@ fn test_dispute_and_timeout_receipt_issuance() {
     // Timeout refund issues 1 receipt for the refunded client amount
     assert_eq!(escrow_client.get_receipt_counter(), counter_before + 3);
 }
+
+#[test]
+fn test_receipt_counter_monotonic_invariant() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        _treasury,
+        client,
+        freelancer,
+        arbitrator,
+        _token_client,
+        _token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let start_counter = escrow_client.get_receipt_counter();
+    let mut expected_receipts = start_counter;
+
+    // Escrow 1: 2 partial releases + 1 full release = 3 receipts
+    let job1 = String::from_str(&env, "inv-job-1");
+    let mut ms1 = Vec::new(&env);
+    ms1.push_back(MilestoneInput {
+        description: String::from_str(&env, "M1"),
+        percentage: 60,
+    });
+    ms1.push_back(MilestoneInput {
+        description: String::from_str(&env, "M2"),
+        percentage: 40,
+    });
+    let params1 = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address.clone(),
+        total_amount: 1_000_000,
+        timeout_timestamp: env.ledger().timestamp() + 50_000,
+        arbitrator: arbitrator.clone(),
+    };
+    escrow_client.create_escrow(&job1, &client, &params1, &ms1);
+    escrow_client.start_work(&job1, &freelancer);
+
+    escrow_client.release_partial_milestone(&job1, &client, &1, &200_000);
+    expected_receipts += 1;
+    assert_eq!(escrow_client.get_receipt_counter(), expected_receipts);
+
+    escrow_client.release_partial_milestone(&job1, &client, &1, &400_000);
+    expected_receipts += 1;
+    assert_eq!(escrow_client.get_receipt_counter(), expected_receipts);
+
+    escrow_client.release_milestone(&job1, &client, &2);
+    expected_receipts += 1;
+    assert_eq!(escrow_client.get_receipt_counter(), expected_receipts);
+
+    // Escrow 2: Cancel before start = 1 refund receipt
+    let job2 = String::from_str(&env, "inv-job-2");
+    let mut ms2 = Vec::new(&env);
+    ms2.push_back(MilestoneInput {
+        description: String::from_str(&env, "All"),
+        percentage: 100,
+    });
+    let params2 = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address.clone(),
+        total_amount: 500_000,
+        timeout_timestamp: env.ledger().timestamp() + 50_000,
+        arbitrator: arbitrator.clone(),
+    };
+    escrow_client.create_escrow(&job2, &client, &params2, &ms2);
+    escrow_client.cancel_and_refund(&job2, &client);
+    expected_receipts += 1;
+    assert_eq!(escrow_client.get_receipt_counter(), expected_receipts);
+
+    // Escrow 3: Expired milestone cancel = 1 receipt
+    let job3 = String::from_str(&env, "inv-job-3");
+    let mut ms3 = Vec::new(&env);
+    ms3.push_back(MilestoneInput {
+        description: String::from_str(&env, "M1"),
+        percentage: 50,
+    });
+    ms3.push_back(MilestoneInput {
+        description: String::from_str(&env, "M2"),
+        percentage: 50,
+    });
+    let params3 = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address.clone(),
+        total_amount: 600_000,
+        timeout_timestamp: env.ledger().timestamp() + 50_000,
+        arbitrator: arbitrator.clone(),
+    };
+    escrow_client.create_escrow(&job3, &client, &params3, &ms3);
+    escrow_client.start_work(&job3, &freelancer);
+
+    let dl = env.ledger().timestamp() + 500;
+    escrow_client.set_milestone_deadline(&job3, &client, &1, &dl);
+
+    env.ledger().with_mut(|li| {
+        li.timestamp = dl + 10;
+    });
+
+    escrow_client.cancel_expired_milestone(&job3, &client, &1);
+    expected_receipts += 1;
+    assert_eq!(escrow_client.get_receipt_counter(), expected_receipts);
+
+    // Verify global monotonicity
+    assert!(escrow_client.get_receipt_counter() > start_counter);
+    assert_eq!(escrow_client.get_receipt_counter() - start_counter, 5);
+}

@@ -133,4 +133,40 @@ describe("RpcCircuitBreaker", () => {
     expect(cleanMetrics.failures).toBe(0);
     expect(cleanMetrics.lastFailureTime).toBeNull();
   });
+
+  it("fires onStateChange callback and tracks short-circuited calls in detailed report", async () => {
+    const onStateChange = jest.fn();
+    const cb = new RpcCircuitBreaker({
+      failureThreshold: 2,
+      resetTimeoutMs: 3000,
+      onStateChange,
+    });
+
+    // Execute 1 success
+    await cb.execute(async () => "success");
+
+    // Execute 2 failures -> trips breaker
+    for (let i = 0; i < 2; i++) {
+      await expect(
+        cb.execute(async () => {
+          throw new Error("RPC error");
+        })
+      ).rejects.toThrow();
+    }
+
+    expect(onStateChange).toHaveBeenCalledWith(
+      expect.objectContaining({ from: "CLOSED", to: "OPEN" })
+    );
+
+    // Call while OPEN -> short-circuits
+    await expect(cb.execute(async () => "blocked")).rejects.toThrow(CircuitBreakerOpenError);
+
+    const report = cb.getDetailedReport();
+    expect(report.state).toBe("OPEN");
+    expect(report.totalExecutions).toBe(3); // 1 success + 2 attempts
+    expect(report.totalFailures).toBe(2);
+    expect(report.totalShortCircuited).toBe(1);
+    expect(report.failureRatePercentage).toBe(66.67);
+    expect(report.stateTransitions).toHaveLength(1);
+  });
 });

@@ -24,6 +24,7 @@
 - **Batch Payout Partitioning**: Automatic splitting of multi-recipient transactions conforming to Stellar's 100 operations/envelope ceiling with Stroop fee estimation.
 - **Milestone Deadlines & Overdue Cancellation**: Enforceable milestone completion timestamps with client fund recovery on unfulfilled deadlines.
 - **Incremental Partial Releases**: Safe pro-rata releases for intermediate deliverables without full milestone finalization.
+- **RPC Circuit Breaker & Fail-Fast Protection**: Three-state finite state machine (`CLOSED`, `OPEN`, `HALF_OPEN`) preventing cascading node saturation during network outages.
 - **Monotonic Settlement Audit Receipts**: Sequential on-chain receipt counter ensuring immutable audit logs across releases, dispute resolutions, and timeout refunds.
 - **Multi-Network Explorer Utilities**: Canonical link builder and address/hash truncators supporting Testnet, Futurenet, and Mainnet/Public.
 
@@ -251,6 +252,26 @@ console.log(txUrl); // https://stellar.expert/explorer/testnet/tx/e3b0c442...52b
 // Truncate public key or hash for clean presentation
 const shortAddress = truncateIdentifier("GDQP2KPQGKIHYJGXNUIYOMHARUARCA7DJT5FO2FFOOKY3IF53G4J7734", 6, 6);
 console.log(shortAddress); // "GDQP2K...4J7734"
+```
+
+### 17. RPC Circuit Breaker & Upstream Node Protection
+
+```typescript
+import { RpcCircuitBreaker, CircuitBreakerOpenError } from "@stellar-purplepay/escrow-sdk";
+
+// Standalone circuit breaker or configured directly via EscrowClient
+const cb = new RpcCircuitBreaker({
+  failureThreshold: 5,        // Trip after 5 consecutive failures
+  resetTimeoutMs: 10_000,     // Wait 10s before probing in HALF_OPEN
+  halfOpenSuccessThreshold: 2, // Require 2 probe successes to reset to CLOSED
+  onStateChange: (transition) => {
+    console.warn(`Circuit Breaker transitioned: ${transition.from} -> ${transition.to} (${transition.reason})`);
+  },
+});
+
+// Inspect uptime and failure metrics
+const report = cb.getDetailedReport();
+console.log(`Current state: ${report.state}, Total Failures: ${report.totalFailures}, Short-circuited: ${report.totalShortCircuited}`);
 ```
 
 ---

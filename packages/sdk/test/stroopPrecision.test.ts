@@ -38,4 +38,35 @@ describe("stroopPrecision utility", () => {
     expect(() => toStroops("abc")).toThrow(ValidationError);
     expect(() => toStroops("")).toThrow(ValidationError);
   });
+
+  it("verifies round-trip bijection invariance across randomized Stroop values", () => {
+    // Generate 500 randomized Stroop amounts
+    for (let i = 0; i < 500; i++) {
+      // Scale from 1 Stroop to 10 billion Stroops (1,000 XLM)
+      const wholePart = BigInt(Math.floor(Math.random() * 1_000_000));
+      const fractionPart = BigInt(Math.floor(Math.random() * 10_000_000));
+      const expectedStroops = wholePart * STROOPS_PER_XLM_BIGINT + fractionPart;
+
+      const formattedXlm = fromStroops(expectedStroops);
+      const convertedBack = toStroops(formattedXlm);
+
+      expect(convertedBack).toBe(expectedStroops);
+
+      const reFormatted = fromStroops(convertedBack);
+      expect(reFormatted).toBe(formattedXlm);
+    }
+  });
+
+  it("verifies additive linearity property without floating point drift", () => {
+    // Proves (a + b) in Stroops matches BigInt addition perfectly
+    const aStr = "123.4567890";
+    const bStr = "876.5432110";
+
+    const aStroops = toStroops(aStr);
+    const bStroops = toStroops(bStr);
+
+    const sumStroops = aStroops + bStroops;
+    expect(sumStroops).toBe(10_000_000_000n); // exactly 1,000 XLM
+    expect(fromStroops(sumStroops)).toBe("1000.0000000");
+  });
 });

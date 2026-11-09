@@ -2095,3 +2095,55 @@ fn test_emergency_freeze_notice_period_and_unfreeze() {
     assert_eq!(active_final, false);
     assert_eq!(unlock_final, 0);
 }
+
+#[test]
+fn test_audit_log_counter_and_receipt_verification() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        admin,
+        _treasury,
+        client,
+        _freelancer,
+        _arbitrator,
+        _token_client,
+        _token_admin,
+        _token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    assert_eq!(escrow_client.get_audit_log_count(), 0);
+
+    let hash1 = BytesN::from_array(&env, &[1u8; 32]);
+    let hash2 = BytesN::from_array(&env, &[2u8; 32]);
+    let hash3 = BytesN::from_array(&env, &[3u8; 32]);
+
+    let action1 = symbol_short!("create");
+    let action2 = symbol_short!("release");
+    let action3 = symbol_short!("resolve");
+
+    let idx1 = escrow_client.record_audit_entry(&client, &action1, &hash1);
+    assert_eq!(idx1, 1);
+    assert_eq!(escrow_client.get_audit_log_count(), 1);
+
+    let idx2 = escrow_client.record_audit_entry(&client, &action2, &hash2);
+    assert_eq!(idx2, 2);
+    assert_eq!(escrow_client.get_audit_log_count(), 2);
+
+    let idx3 = escrow_client.record_audit_entry(&admin, &action3, &hash3);
+    assert_eq!(idx3, 3);
+    assert_eq!(escrow_client.get_audit_log_count(), 3);
+
+    // Exact match verification
+    assert_eq!(escrow_client.verify_audit_receipt(&1, &hash1), true);
+    assert_eq!(escrow_client.verify_audit_receipt(&2, &hash2), true);
+    assert_eq!(escrow_client.verify_audit_receipt(&3, &hash3), true);
+
+    // Wrong hash returns false
+    assert_eq!(escrow_client.verify_audit_receipt(&1, &hash2), false);
+
+    // Non-existent index returns AuditIndexMismatch
+    let non_existent = escrow_client.try_verify_audit_receipt(&999, &hash1);
+    assert_eq!(non_existent.err(), Some(Ok(EscrowError::AuditIndexMismatch)));
+}

@@ -103,6 +103,40 @@ impl EscrowContract {
         Ok(())
     }
 
+    /// Update platform treasury recipient address (admin only).
+    pub fn set_treasury(env: Env, new_treasury: Address) -> Result<(), EscrowError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(EscrowError::NotInitialized)?;
+        admin.require_auth();
+
+        env.storage().instance().set(&DataKey::Treasury, &new_treasury);
+        env.events().publish(
+            (symbol_short!("admin"), symbol_short!("treasury")),
+            new_treasury,
+        );
+        Ok(())
+    }
+
+    /// Transfer contract admin ownership to a new address (current admin only).
+    pub fn set_admin(env: Env, new_admin: Address) -> Result<(), EscrowError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(EscrowError::NotInitialized)?;
+        admin.require_auth();
+
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+        env.events().publish(
+            (symbol_short!("admin"), symbol_short!("transfer")),
+            new_admin,
+        );
+        Ok(())
+    }
+
     /// Create an escrow with optional milestones and lock funds from the client into contract custody.
     pub fn create_escrow(
         env: Env,

@@ -549,3 +549,33 @@ fn test_lightweight_query_methods() {
     assert_eq!(progress.percentage_released, 40);
     assert_eq!(progress.status, EscrowStatus::InProgress);
 }
+
+#[test]
+fn test_treasury_rotation_and_admin_transfer() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        _treasury,
+        _client,
+        _freelancer,
+        _arbitrator,
+        _token_client,
+        _token_admin,
+        _token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let new_treasury = Address::generate(&env);
+    let new_admin = Address::generate(&env);
+
+    // 1. Rotate treasury
+    escrow_client.set_treasury(&new_treasury);
+
+    // 2. Transfer admin
+    escrow_client.set_admin(&new_admin);
+
+    // 3. New admin can configure fee
+    escrow_client.set_fee_bps(&250);
+}

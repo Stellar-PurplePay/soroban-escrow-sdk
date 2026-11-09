@@ -807,4 +807,78 @@ export class EscrowClient {
       return null;
     }
   }
+
+  /**
+   * Builds invocation payload for an arbitrator to withdraw bonded stake.
+   */
+  public prepareWithdrawArbitratorBond(arbitrator: string, token: string, amount: bigint) {
+    if (!isValidStellarAddress(arbitrator)) {
+      throw new ValidationError("Invalid arbitrator Stellar address");
+    }
+    if (!isValidStellarAddress(token)) {
+      throw new ValidationError("Invalid token contract address");
+    }
+    if (amount <= 0n) {
+      throw new ValidationError("Withdrawal amount must be positive");
+    }
+
+    return {
+      contractId: this.contractId,
+      method: "withdraw_arbitrator_bond",
+      args: {
+        arbitrator,
+        token,
+        amount,
+      },
+    };
+  }
+
+  /**
+   * Builds invocation payload to archive a completed/refunded escrow.
+   */
+  public prepareArchiveCompletedEscrow(jobId: string) {
+    if (!jobId || jobId.trim().length === 0) {
+      throw new ValidationError("jobId cannot be empty");
+    }
+
+    return {
+      contractId: this.contractId,
+      method: "archive_completed_escrow",
+      args: {
+        job_id: jobId.trim(),
+      },
+    };
+  }
+
+  /**
+   * Builds invocation payload for setting dispute cooling-off period.
+   */
+  public prepareSetDisputeCooldown(admin: string, cooldownSeconds: number) {
+    if (!isValidStellarAddress(admin)) {
+      throw new ValidationError("Invalid admin Stellar address");
+    }
+    if (cooldownSeconds < 0) {
+      throw new ValidationError("Cooldown seconds cannot be negative");
+    }
+
+    return {
+      contractId: this.contractId,
+      method: "set_dispute_cooldown",
+      args: {
+        admin,
+        cooldown_seconds: cooldownSeconds,
+      },
+    };
+  }
+
+  /**
+   * Builds invocation payload to query the configured dispute cooldown period.
+   */
+  public prepareGetDisputeCooldown() {
+    return {
+      contractId: this.contractId,
+      method: "get_dispute_cooldown",
+      args: {},
+    };
+  }
 }

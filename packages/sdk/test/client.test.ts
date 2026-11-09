@@ -507,5 +507,33 @@ describe("EscrowClient", () => {
       expect(client.parseReceiptEvent(null)).toBeNull();
       expect(client.parseReceiptEvent({})).toBeNull();
     });
+
+    it("should prepare withdraw_arbitrator_bond, archive_completed_escrow, and dispute cooldown payloads", () => {
+      // withdraw_arbitrator_bond
+      const withdrawPayload = client.prepareWithdrawArbitratorBond(
+        validArbitratorAddress,
+        validTokenAddress,
+        100000n
+      );
+      expect(withdrawPayload.method).toBe("withdraw_arbitrator_bond");
+      expect(withdrawPayload.args.amount).toBe(100000n);
+
+      // archive_completed_escrow
+      const archivePayload = client.prepareArchiveCompletedEscrow("job-archived-99");
+      expect(archivePayload.method).toBe("archive_completed_escrow");
+      expect(archivePayload.args.job_id).toBe("job-archived-99");
+
+      // set_dispute_cooldown
+      const cooldownPayload = client.prepareSetDisputeCooldown(
+        validClientAddress,
+        300
+      );
+      expect(cooldownPayload.method).toBe("set_dispute_cooldown");
+      expect(cooldownPayload.args.cooldown_seconds).toBe(300);
+
+      // get_dispute_cooldown
+      const getCooldownPayload = client.prepareGetDisputeCooldown();
+      expect(getCooldownPayload.method).toBe("get_dispute_cooldown");
+    });
   });
 });

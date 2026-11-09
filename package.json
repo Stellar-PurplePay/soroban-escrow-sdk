@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "build:contract": "cd contracts/escrow && cargo build --target wasm32v1-none --release",
-    "test:contract": "cd contracts/escrow && cargo test",
+    "test:contract": "cd contracts/escrow && cargo test --lib",
     "build:sdk": "npm run --workspace=@stellar-purplepay/escrow-sdk build",
     "test:sdk": "npm run --workspace=@stellar-purplepay/escrow-sdk test",
     "test": "npm run test:contract && npm run test:sdk",

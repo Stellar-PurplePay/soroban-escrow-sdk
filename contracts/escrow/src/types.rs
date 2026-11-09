@@ -62,6 +62,14 @@ pub struct EscrowProgress {
 }
 
 #[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ArbitratorVote {
+    pub arbitrator: Address,
+    pub client_award: i128,
+    pub freelancer_award: i128,
+}
+
+#[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
     Admin,
@@ -71,4 +79,5 @@ pub enum DataKey {
     Escrow(String),
     Milestones(String),
     Deliverable(String),
+    DisputeBallot(String),
 }

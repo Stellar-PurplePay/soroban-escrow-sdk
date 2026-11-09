@@ -565,7 +565,7 @@ impl EscrowContract {
         arbitrator.require_auth();
 
         let escrow_key = DataKey::Escrow(job_id.clone());
-        let mut escrow: Escrow = env
+        let escrow: Escrow = env
             .storage()
             .persistent()
             .get(&escrow_key)
@@ -587,10 +587,93 @@ impl EscrowContract {
             return Err(EscrowError::InvalidAmount);
         }
 
+        Self::execute_dispute_resolution(&env, &job_id, client_award, freelancer_award)
+    }
+
+    /// Cast a vote in a multi-arbitrator 2-of-3 quorum panel.
+    /// Returns true if 2-of-3 quorum was reached and dispute was settled; false if pending more votes.
+    pub fn vote_dispute(
+        env: Env,
+        job_id: String,
+        arbitrator: Address,
+        client_award: i128,
+        freelancer_award: i128,
+    ) -> Result<bool, EscrowError> {
+        ensure_not_paused(&env)?;
+        arbitrator.require_auth();
+
+        let escrow_key = DataKey::Escrow(job_id.clone());
+        let escrow: Escrow = env
+            .storage()
+            .persistent()
+            .get(&escrow_key)
+            .ok_or(EscrowError::EscrowNotFound)?;
+
+        if escrow.status != EscrowStatus::Disputed {
+            return Err(EscrowError::EscrowNotDisputed);
+        }
+
+        let remaining = escrow.total_amount - escrow.released_amount;
+        if client_award < 0
+            || freelancer_award < 0
+            || (client_award + freelancer_award) != remaining
+        {
+            return Err(EscrowError::InvalidAmount);
+        }
+
+        let ballot_key = DataKey::DisputeBallot(job_id.clone());
+        let mut votes: Vec<ArbitratorVote> = env
+            .storage()
+            .persistent()
+            .get(&ballot_key)
+            .unwrap_or_else(|| Vec::new(&env));
+
+        for vote in votes.iter() {
+            if vote.arbitrator == arbitrator {
+                return Err(EscrowError::Unauthorized);
+            }
+        }
+
+        votes.push_back(ArbitratorVote {
+            arbitrator: arbitrator.clone(),
+            client_award,
+            freelancer_award,
+        });
+        env.storage().persistent().set(&ballot_key, &votes);
+        extend_storage_ttl(&env, &job_id);
+
+        let mut matching_count = 0;
+        for vote in votes.iter() {
+            if vote.client_award == client_award && vote.freelancer_award == freelancer_award {
+                matching_count += 1;
+            }
+        }
+
+        if matching_count >= 2 {
+            Self::execute_dispute_resolution(&env, &job_id, client_award, freelancer_award)?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    fn execute_dispute_resolution(
+        env: &Env,
+        job_id: &String,
+        client_award: i128,
+        freelancer_award: i128,
+    ) -> Result<(), EscrowError> {
+        let escrow_key = DataKey::Escrow(job_id.clone());
+        let mut escrow: Escrow = env
+            .storage()
+            .persistent()
+            .get(&escrow_key)
+            .ok_or(EscrowError::EscrowNotFound)?;
+
         escrow.released_amount += freelancer_award;
         escrow.status = EscrowStatus::Completed;
         env.storage().persistent().set(&escrow_key, &escrow);
-        extend_storage_ttl(&env, &job_id);
+        extend_storage_ttl(env, job_id);
 
         let fee_bps: u32 = env.storage().instance().get(&DataKey::FeeBps).unwrap_or(0);
         let treasury: Option<Address> = env.storage().instance().get(&DataKey::Treasury);
@@ -598,7 +681,7 @@ impl EscrowContract {
         let fee = (freelancer_award * (fee_bps as i128)) / 10_000;
         let freelancer_payout = freelancer_award - fee;
 
-        let token_client = token::Client::new(&env, &escrow.token);
+        let token_client = token::Client::new(env, &escrow.token);
 
         if client_award > 0 {
             token_client.transfer(
@@ -622,7 +705,7 @@ impl EscrowContract {
             );
         }
 
-        EscrowEvents::dispute_resolved(&env, job_id, client_award, freelancer_award);
+        EscrowEvents::dispute_resolved(env, job_id.clone(), client_award, freelancer_award);
 
         Ok(())
     }
@@ -684,5 +767,13 @@ impl EscrowContract {
             }
         }
         Err(EscrowError::MilestoneNotFound)
+    }
+
+    /// Get cast votes for a disputed escrow.
+    pub fn get_dispute_votes(env: Env, job_id: String) -> Vec<ArbitratorVote> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::DisputeBallot(job_id))
+            .unwrap_or_else(|| Vec::new(&env))
     }
 }

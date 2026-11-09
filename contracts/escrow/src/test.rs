@@ -672,3 +672,71 @@ fn test_property_milestone_sum_conservation() {
         assert_eq!(escrow.released_amount, total_deposit);
     }
 }
+
+#[test]
+fn test_multi_arbitrator_quorum_voting() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        treasury,
+        client,
+        freelancer,
+        _arbitrator,
+        token_client,
+        _token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let arb1 = Address::generate(&env);
+    let arb2 = Address::generate(&env);
+    let arb3 = Address::generate(&env);
+
+    let job_id = String::from_str(&env, "job-multi-arb");
+    let timeout = env.ledger().timestamp() + 10_000;
+
+    let params = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address.clone(),
+        total_amount: 1_000_000,
+        timeout_timestamp: timeout,
+        arbitrator: arb1.clone(),
+    };
+
+    escrow_client.create_escrow(&job_id, &client, &params, &Vec::new(&env));
+    escrow_client.start_work(&job_id, &freelancer);
+    escrow_client.raise_dispute(&job_id, &client);
+
+    // Initial balances
+    let client_initial = token_client.balance(&client);
+    let freelancer_initial = token_client.balance(&freelancer);
+
+    // Vote 1: arb1 votes (700k to client, 300k to freelancer)
+    let res1 = escrow_client.vote_dispute(&job_id, &arb1, &700_000, &300_000);
+    assert_eq!(res1, false); // Quorum not reached yet
+
+    let votes = escrow_client.get_dispute_votes(&job_id);
+    assert_eq!(votes.len(), 1);
+
+    // Vote 2: arb2 votes different split (500k / 500k)
+    let res2 = escrow_client.vote_dispute(&job_id, &arb2, &500_000, &500_000);
+    assert_eq!(res2, false); // Different vote, quorum still not reached
+
+    // Vote 3: arb3 votes matching arb1 (700k / 300k) -> 2 of 3 quorum reached!
+    let res3 = escrow_client.vote_dispute(&job_id, &arb3, &700_000, &300_000);
+    assert_eq!(res3, true); // Quorum reached and dispute resolved!
+
+    // Verify final status and payout
+    let escrow = escrow_client.get_escrow(&job_id);
+    assert_eq!(escrow.status, EscrowStatus::Completed);
+
+    let client_gain = token_client.balance(&client) - client_initial;
+    let freelancer_gain = token_client.balance(&freelancer) - freelancer_initial;
+
+    // Fee: 1% of 300,000 = 3,000
+    assert_eq!(client_gain, 700_000);
+    assert_eq!(freelancer_gain, 297_000);
+    assert_eq!(token_client.balance(&treasury), 3_000);
+}

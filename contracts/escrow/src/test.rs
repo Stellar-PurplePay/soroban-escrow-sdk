@@ -1325,3 +1325,67 @@ fn test_receipt_counter_and_event_issuance() {
     escrow_client.release_milestone(&job_id, &client, &2);
     assert_eq!(escrow_client.get_receipt_counter(), initial_receipts + 3);
 }
+
+#[test]
+fn test_dispute_and_timeout_receipt_issuance() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        _treasury,
+        client,
+        freelancer,
+        arbitrator,
+        _token_client,
+        _token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let counter_before = escrow_client.get_receipt_counter();
+
+    // 1. Escrow resolved by arbitrator
+    let job_id1 = String::from_str(&env, "job-dispute-rcpt");
+    let params1 = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address.clone(),
+        total_amount: 500_000,
+        timeout_timestamp: env.ledger().timestamp() + 50_000,
+        arbitrator: arbitrator.clone(),
+    };
+    let mut ms1 = Vec::new(&env);
+    ms1.push_back(MilestoneInput {
+        description: String::from_str(&env, "M1"),
+        percentage: 100,
+    });
+
+    escrow_client.create_escrow(&job_id1, &client, &params1, &ms1);
+    escrow_client.start_work(&job_id1, &freelancer);
+    escrow_client.raise_dispute(&job_id1, &client);
+
+    // Arbitrator resolves: 200k to client, 300k to freelancer -> 2 receipts (1 client, 1 freelancer)
+    escrow_client.resolve_dispute(&job_id1, &arbitrator, &200_000, &300_000);
+    assert_eq!(escrow_client.get_receipt_counter(), counter_before + 2);
+
+    // 2. Escrow resolved via timeout refund
+    let job_id2 = String::from_str(&env, "job-timeout-rcpt");
+    let timeout = env.ledger().timestamp() + 100;
+    let params2 = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address.clone(),
+        total_amount: 400_000,
+        timeout_timestamp: timeout,
+        arbitrator: arbitrator.clone(),
+    };
+    escrow_client.create_escrow(&job_id2, &client, &params2, &ms1);
+
+    // Advance ledger past timeout
+    env.ledger().with_mut(|li| {
+        li.timestamp = timeout + 1;
+    });
+
+    escrow_client.claim_timeout_refund(&job_id2);
+    // Timeout refund issues 1 receipt for the refunded client amount
+    assert_eq!(escrow_client.get_receipt_counter(), counter_before + 3);
+}

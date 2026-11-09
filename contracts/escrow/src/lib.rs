@@ -585,6 +585,16 @@ impl EscrowContract {
         if remaining > 0 {
             let token_client = token::Client::new(&env, &escrow.token);
             token_client.transfer(&env.current_contract_address(), &escrow.client, &remaining);
+            let receipt_id = next_receipt_id(&env);
+            EscrowEvents::receipt_issued(
+                &env,
+                receipt_id,
+                job_id.clone(),
+                0,
+                escrow.client.clone(),
+                remaining,
+                0,
+            );
         }
 
         EscrowEvents::escrow_refunded(&env, job_id, remaining);
@@ -663,6 +673,16 @@ impl EscrowContract {
         if remaining > 0 {
             let token_client = token::Client::new(&env, &escrow.token);
             token_client.transfer(&env.current_contract_address(), &escrow.client, &remaining);
+            let receipt_id = next_receipt_id(&env);
+            EscrowEvents::receipt_issued(
+                &env,
+                receipt_id,
+                job_id.clone(),
+                0,
+                escrow.client.clone(),
+                remaining,
+                0,
+            );
         }
         extend_storage_ttl(&env, &job_id);
 
@@ -872,6 +892,16 @@ impl EscrowContract {
                 &escrow.client,
                 &client_award,
             );
+            let client_receipt_id = next_receipt_id(env);
+            EscrowEvents::receipt_issued(
+                env,
+                client_receipt_id,
+                job_id.clone(),
+                0,
+                escrow.client.clone(),
+                client_award,
+                0,
+            );
         }
 
         if fee > 0 {
@@ -885,6 +915,16 @@ impl EscrowContract {
                 &env.current_contract_address(),
                 &escrow.freelancer,
                 &freelancer_payout,
+            );
+            let freelancer_receipt_id = next_receipt_id(env);
+            EscrowEvents::receipt_issued(
+                env,
+                freelancer_receipt_id,
+                job_id.clone(),
+                0,
+                escrow.freelancer.clone(),
+                freelancer_payout,
+                fee,
             );
         }
 
@@ -1115,6 +1155,16 @@ impl EscrowContract {
             &env.current_contract_address(),
             &client,
             &refund_amount,
+        );
+        let receipt_id = next_receipt_id(&env);
+        EscrowEvents::receipt_issued(
+            &env,
+            receipt_id,
+            job_id.clone(),
+            milestone_id,
+            client.clone(),
+            refund_amount,
+            0,
         );
 
         escrow.released_amount += refund_amount;

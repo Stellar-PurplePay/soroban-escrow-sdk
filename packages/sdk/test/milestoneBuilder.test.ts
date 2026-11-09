@@ -62,6 +62,37 @@ describe("MilestoneBuilder", () => {
         MilestoneBuilder.fromAmounts([{ description: "Bad", amount: 0 }])
       ).toThrow(ValidationError);
     });
+
+    it("verifies equal milestone distribution strictly sums to 100% across all supported counts (1..25)", () => {
+      for (let count = 1; count <= 25; count++) {
+        const milestones = MilestoneBuilder.distributeEqualMilestones(count);
+        expect(milestones).toHaveLength(count);
+
+        const sum = milestones.reduce((acc, m) => acc + m.percentage, 0);
+        expect(sum).toBe(100);
+
+        for (const m of milestones) {
+          expect(m.percentage).toBeGreaterThan(0);
+          expect(m.percentage).toBeLessThanOrEqual(100);
+        }
+      }
+    });
+
+    it("verifies fromAmounts property conservation across randomized amount distributions", () => {
+      for (let trial = 0; trial < 100; trial++) {
+        const count = 2 + Math.floor(Math.random() * 10); // 2 to 11 items
+        const items = Array.from({ length: count }, (_, idx) => ({
+          description: `Task ${idx + 1}`,
+          amount: 1 + Math.floor(Math.random() * 100_000),
+        }));
+
+        const milestones = MilestoneBuilder.fromAmounts(items);
+        expect(milestones).toHaveLength(count);
+
+        const sum = milestones.reduce((acc, m) => acc + m.percentage, 0);
+        expect(sum).toBe(100);
+      }
+    });
   });
 });
 

@@ -7,6 +7,9 @@ import {
 } from "./types";
 import { validateMilestones, isValidStellarAddress } from "./utils";
 import { ValidationError } from "./errors";
+import { parseResourceEstimate, ResourceCost, ResourceBudgetLimits } from "./estimator";
+import { signWithFreighter, FreighterSignOptions, FreighterApi } from "./freighter";
+import { withRpcRetry, RpcRetryOptions } from "./rpcRetry";
 
 export class EscrowClient {
   public readonly rpcUrl: string;
@@ -293,5 +296,46 @@ export class EscrowClient {
         new_admin: newAdminAddress,
       },
     };
+  }
+
+  /**
+   * Estimates resource costs and inclusion fees from a Soroban simulation result.
+   */
+  public estimateResources(
+    simulationResponse: any,
+    options?: {
+      baseInclusionFeeStroops?: number;
+      budgetLimits?: ResourceBudgetLimits;
+    }
+  ): ResourceCost {
+    return parseResourceEstimate(simulationResponse, options);
+  }
+
+  /**
+   * Signs an XDR transaction envelope using the Freighter wallet with this client's network.
+   */
+  public async signWithFreighter(
+    xdr: string,
+    options?: Omit<FreighterSignOptions, "networkPassphrase">,
+    customApi?: FreighterApi
+  ): Promise<string> {
+    return signWithFreighter(
+      xdr,
+      {
+        ...options,
+        networkPassphrase: this.networkPassphrase,
+      },
+      customApi
+    );
+  }
+
+  /**
+   * Executes an asynchronous RPC operation with automatic exponential backoff on transient errors.
+   */
+  public async invokeWithRetry<T>(
+    operation: () => Promise<T>,
+    retryOptions?: RpcRetryOptions
+  ): Promise<T> {
+    return withRpcRetry(operation, retryOptions);
   }
 }

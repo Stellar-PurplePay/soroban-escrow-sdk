@@ -210,5 +210,35 @@ describe("EscrowClient", () => {
       expect(payload.args.new_admin).toBe(validFreelancerAddress);
       expect(() => client.prepareSetAdmin("bad-address")).toThrow(/Invalid new admin address/);
     });
+
+    it("should estimate resources via parseResourceEstimate helper", () => {
+      const estimate = client.estimateResources({
+        minResourceFee: 5000,
+        cost: { cpuInsns: 10000, memBytes: 20000 },
+      });
+      expect(estimate.minResourceFeeStroops).toBe(5000);
+      expect(estimate.cpuInstructions).toBe(10000);
+    });
+
+    it("should invoke operation with retry logic", async () => {
+      const op = jest.fn().mockResolvedValue("RETRY_OK");
+      const res = await client.invokeWithRetry(op);
+      expect(res).toBe("RETRY_OK");
+      expect(op).toHaveBeenCalledTimes(1);
+    });
+
+    it("should forward signWithFreighter with configured network passphrase", async () => {
+      const mockFreighter = {
+        isConnected: jest.fn().mockResolvedValue(true),
+        getUserInfo: jest.fn().mockResolvedValue({ publicKey: validClientAddress }),
+        signTransaction: jest.fn().mockResolvedValue("SIGNED_XDR"),
+      };
+
+      const signed = await client.signWithFreighter("DUMMY_XDR", {}, mockFreighter as any);
+      expect(signed).toBe("SIGNED_XDR");
+      expect(mockFreighter.signTransaction).toHaveBeenCalledWith("DUMMY_XDR", {
+        networkPassphrase: "Test SDF Network ; September 2015",
+      });
+    });
   });
 });

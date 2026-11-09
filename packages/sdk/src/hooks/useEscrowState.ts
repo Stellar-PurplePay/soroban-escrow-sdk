@@ -7,22 +7,29 @@ export interface EscrowState {
   progress: EscrowProgress | null;
   isLoading: boolean;
   error: Error | null;
+  lastUpdated: number | null;
+  ledgerSequence?: number;
 }
 
 export interface EscrowStateFetchResult {
   escrow: EscrowRecord;
   milestones: Milestone[];
   progress: EscrowProgress;
+  ledgerSequence?: number;
 }
 
 /**
- * State manager providing reactive subscription for Soroban escrow contract state.
+ * State manager providing reactive subscription, auto-polling, and optimistic updates
+ * for Soroban escrow contract state.
  */
 export class EscrowStateManager {
   private client: EscrowClient;
   private jobId: string;
   private state: EscrowState;
   private listeners: Array<(state: EscrowState) => void> = [];
+  private pollIntervalId: ReturnType<typeof setInterval> | null = null;
+  private isFetching = false;
+  private preOptimisticSnapshot: EscrowState | null = null;
 
   constructor(client: EscrowClient, jobId: string) {
     this.client = client;
@@ -33,6 +40,7 @@ export class EscrowStateManager {
       progress: null,
       isLoading: false,
       error: null,
+      lastUpdated: null,
     };
   }
 
@@ -58,6 +66,8 @@ export class EscrowStateManager {
   public async refresh(
     fetcher: (client: EscrowClient, jobId: string) => Promise<EscrowStateFetchResult>
   ): Promise<void> {
+    if (this.isFetching) return;
+    this.isFetching = true;
     this.state.isLoading = true;
     this.state.error = null;
     this.notify();
@@ -67,12 +77,63 @@ export class EscrowStateManager {
       this.state.escrow = result.escrow;
       this.state.milestones = result.milestones;
       this.state.progress = result.progress;
+      this.state.ledgerSequence = result.ledgerSequence;
+      this.state.lastUpdated = Date.now();
       this.state.isLoading = false;
+      this.preOptimisticSnapshot = null;
       this.notify();
     } catch (err: any) {
       this.state.error = err instanceof Error ? err : new Error(String(err));
       this.state.isLoading = false;
       this.notify();
+    } finally {
+      this.isFetching = false;
     }
+  }
+
+  public startPolling(
+    intervalMs: number,
+    fetcher: (client: EscrowClient, jobId: string) => Promise<EscrowStateFetchResult>
+  ): void {
+    this.stopPolling();
+    this.refresh(fetcher);
+    this.pollIntervalId = setInterval(() => {
+      this.refresh(fetcher);
+    }, Math.max(intervalMs, 500));
+  }
+
+  public stopPolling(): void {
+    if (this.pollIntervalId !== null) {
+      clearInterval(this.pollIntervalId);
+      this.pollIntervalId = null;
+    }
+  }
+
+  public isPolling(): boolean {
+    return this.pollIntervalId !== null;
+  }
+
+  public applyOptimisticUpdate(update: Partial<EscrowRecord>): void {
+    if (!this.state.escrow) return;
+    this.preOptimisticSnapshot = { ...this.state };
+    this.state.escrow = {
+      ...this.state.escrow,
+      ...update,
+    };
+    this.state.lastUpdated = Date.now();
+    this.notify();
+  }
+
+  public rollbackOptimisticUpdate(): void {
+    if (this.preOptimisticSnapshot) {
+      this.state = { ...this.preOptimisticSnapshot };
+      this.preOptimisticSnapshot = null;
+      this.notify();
+    }
+  }
+
+  public destroy(): void {
+    this.stopPolling();
+    this.listeners = [];
   }
 }

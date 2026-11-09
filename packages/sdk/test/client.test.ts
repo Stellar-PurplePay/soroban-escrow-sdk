@@ -462,5 +462,43 @@ describe("EscrowClient", () => {
       expect(summary.totalAmountXlm).toBe("100.0000000");
       expect(summary.chunks).toHaveLength(1);
     });
+
+    it("should prepare get_receipt_counter payload", () => {
+      const payload = client.prepareGetReceiptCounter();
+      expect(payload.method).toBe("get_receipt_counter");
+      expect(payload.contractId).toBe(client.contractId);
+    });
+
+    it("should parse array-based receipt event data", () => {
+      const rawEvent = {
+        data: [42, "job-101", 1, validFreelancerAddress, 5000000n, 50000n],
+      };
+      const parsed = client.parseReceiptEvent(rawEvent);
+      expect(parsed).not.toBeNull();
+      expect(parsed?.receiptId).toBe(42);
+      expect(parsed?.jobId).toBe("job-101");
+      expect(parsed?.recipient).toBe(validFreelancerAddress);
+      expect(parsed?.amount).toBe(5000000n);
+      expect(parsed?.fee).toBe(50000n);
+    });
+
+    it("should parse object-based receipt event data", () => {
+      const rawEvent = {
+        receiptId: 99,
+        jobId: "job-200",
+        milestoneId: 2,
+        recipient: validFreelancerAddress,
+        amount: "1000000",
+        fee: "10000",
+      };
+      const parsed = client.parseReceiptEvent(rawEvent);
+      expect(parsed?.receiptId).toBe(99);
+      expect(parsed?.jobId).toBe("job-200");
+    });
+
+    it("should return null for malformed receipt events", () => {
+      expect(client.parseReceiptEvent(null)).toBeNull();
+      expect(client.parseReceiptEvent({})).toBeNull();
+    });
   });
 });

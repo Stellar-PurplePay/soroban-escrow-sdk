@@ -5,6 +5,7 @@ import {
   EscrowStatus,
   Milestone,
   ContractHealthReport,
+  PaymentReceiptEvent,
 } from "./types";
 import { validateMilestones, isValidStellarAddress } from "./utils";
 import { ValidationError } from "./errors";
@@ -744,5 +745,49 @@ export class EscrowClient {
     options?: PartitionOptions
   ): BatchPaymentSummary {
     return partitionPayments(payments, options);
+  }
+
+  /**
+   * Builds invocation payload to query the contract receipt counter.
+   */
+  public prepareGetReceiptCounter() {
+    return {
+      contractId: this.contractId,
+      method: "get_receipt_counter",
+      args: {},
+    };
+  }
+
+  /**
+   * Parses contract receipt event data into structured PaymentReceiptEvent.
+   */
+  public parseReceiptEvent(event: any): PaymentReceiptEvent | null {
+    if (!event) return null;
+    try {
+      const data = event.data || event;
+      if (Array.isArray(data) && data.length >= 6) {
+        return {
+          receiptId: Number(data[0]),
+          jobId: String(data[1]),
+          milestoneId: Number(data[2]),
+          recipient: String(data[3]),
+          amount: BigInt(data[4]),
+          fee: BigInt(data[5]),
+        };
+      }
+      if (data.receiptId !== undefined) {
+        return {
+          receiptId: Number(data.receiptId),
+          jobId: String(data.jobId),
+          milestoneId: Number(data.milestoneId),
+          recipient: String(data.recipient),
+          amount: BigInt(data.amount),
+          fee: BigInt(data.fee || 0),
+        };
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 }

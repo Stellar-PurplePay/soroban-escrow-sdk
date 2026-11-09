@@ -77,3 +77,12 @@ export interface ContractHealthReport {
   latestLedgerSequence?: number;
   error?: string;
 }
+
+export interface PaymentReceiptEvent {
+  receiptId: number;
+  jobId: string;
+  milestoneId: number;
+  recipient: string;
+  amount: bigint;
+  fee: bigint;
+}

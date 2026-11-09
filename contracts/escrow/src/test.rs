@@ -1203,3 +1203,68 @@ fn test_release_partial_milestone_lifecycle() {
     let final_escrow = escrow_client.get_escrow(&job_id);
     assert_eq!(final_escrow.status, EscrowStatus::Completed);
 }
+
+#[test]
+fn test_property_partial_release_sum_conservation() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        treasury,
+        client,
+        freelancer,
+        arbitrator,
+        token_client,
+        _token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let job_id = String::from_str(&env, "job-prop-partial");
+    let total_milestone = 2_000_000;
+    let timeout = env.ledger().timestamp() + 50_000;
+
+    let params = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address,
+        total_amount: total_milestone,
+        timeout_timestamp: timeout,
+        arbitrator,
+    };
+
+    let mut milestones = Vec::new(&env);
+    milestones.push_back(MilestoneInput {
+        description: String::from_str(&env, "Full Work"),
+        percentage: 100,
+    });
+
+    escrow_client.create_escrow(&job_id, &client, &params, &milestones);
+    escrow_client.start_work(&job_id, &freelancer);
+
+    let increments: [i128; 5] = [200_000, 350_000, 450_000, 500_000, 500_000];
+    let mut total_released = 0;
+    let initial_freelancer_bal = token_client.balance(&freelancer);
+    let initial_treasury_bal = token_client.balance(&treasury);
+
+    for chunk in increments.iter() {
+        let expected_remaining = total_milestone - (total_released + chunk);
+        let remaining = escrow_client.release_partial_milestone(&job_id, &client, &1, chunk);
+        assert_eq!(remaining, expected_remaining);
+
+        total_released += chunk;
+        let released_stored = escrow_client.get_milestone_released_amount(&job_id, &1);
+        let remaining_stored = escrow_client.get_milestone_remaining_amount(&job_id, &1);
+
+        // Invariant: released + remaining == total_milestone
+        assert_eq!(released_stored + remaining_stored, total_milestone);
+        assert_eq!(released_stored, total_released);
+    }
+
+    // Platform fee 1% (100 bps)
+    let total_fee = (total_milestone * 100) / 10_000;
+    let total_freelancer = total_milestone - total_fee;
+
+    assert_eq!(token_client.balance(&freelancer), initial_freelancer_bal + total_freelancer);
+    assert_eq!(token_client.balance(&treasury), initial_treasury_bal + total_fee);
+}

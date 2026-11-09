@@ -89,4 +89,8 @@ pub enum DataKey {
     AdminActionThrottle(Symbol),
     DisputeTimestamp(String),
     DisputeCooldown,
+    EmergencyFreezeUnlock,
+    EmergencyFreezeActive,
+    AuditLogCounter,
+    AuditLogReceipt(u64),
 }

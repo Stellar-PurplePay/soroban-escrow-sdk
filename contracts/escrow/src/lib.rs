@@ -129,6 +129,65 @@ impl EscrowContract {
         env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
     }
 
+    /// Request emergency freeze with mandatory notice period (admin only).
+    pub fn request_emergency_freeze(env: Env, notice_period_seconds: u64) -> Result<u64, EscrowError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(EscrowError::NotInitialized)?;
+        admin.require_auth();
+
+        let period = if notice_period_seconds < 86_400 {
+            86_400
+        } else {
+            notice_period_seconds
+        };
+
+        let now = env.ledger().timestamp();
+        let unlock_timestamp = now + period;
+
+        env.storage().instance().set(&DataKey::EmergencyFreezeActive, &true);
+        env.storage().instance().set(&DataKey::EmergencyFreezeUnlock, &unlock_timestamp);
+
+        EscrowEvents::emergency_freeze_initiated(&env, admin, unlock_timestamp);
+        Ok(unlock_timestamp)
+    }
+
+    /// Query emergency freeze status and unlock timestamp.
+    pub fn get_emergency_freeze_status(env: Env) -> (bool, u64) {
+        let active = env.storage().instance().get(&DataKey::EmergencyFreezeActive).unwrap_or(false);
+        let unlock_timestamp = env.storage().instance().get(&DataKey::EmergencyFreezeUnlock).unwrap_or(0);
+        (active, unlock_timestamp)
+    }
+
+    /// Execute emergency unfreeze once notice period has elapsed (admin only).
+    pub fn execute_emergency_unfreeze(env: Env) -> Result<(), EscrowError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(EscrowError::NotInitialized)?;
+        admin.require_auth();
+
+        let is_active: bool = env.storage().instance().get(&DataKey::EmergencyFreezeActive).unwrap_or(false);
+        if !is_active {
+            return Ok(());
+        }
+
+        let unlock_timestamp: u64 = env.storage().instance().get(&DataKey::EmergencyFreezeUnlock).unwrap_or(0);
+        let now = env.ledger().timestamp();
+        if now < unlock_timestamp {
+            return Err(EscrowError::FreezePeriodNotExpired);
+        }
+
+        env.storage().instance().set(&DataKey::EmergencyFreezeActive, &false);
+        env.storage().instance().remove(&DataKey::EmergencyFreezeUnlock);
+
+        EscrowEvents::emergency_freeze_lifted(&env, admin);
+        Ok(())
+    }
+
     /// Update platform fee basis points (admin only). 100 bps = 1.00%.
     pub fn set_fee_bps(env: Env, fee_bps: u32) -> Result<(), EscrowError> {
         let admin: Address = env

@@ -31,4 +31,7 @@ pub enum EscrowError {
     MilestoneDeadlinePassed = 25,
     InvalidDeadline = 26,
     RateLimitExceeded = 27,
+    FreezePeriodActive = 28,
+    FreezePeriodNotExpired = 29,
+    AuditIndexMismatch = 30,
 }

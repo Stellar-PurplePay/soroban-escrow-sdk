@@ -1,4 +1,4 @@
-use soroban_sdk::{symbol_short, Address, BytesN, Env, String};
+use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Symbol};
 
 pub struct EscrowEvents;
 
@@ -138,5 +138,20 @@ impl EscrowEvents {
     pub fn escrow_archived(env: &Env, job_id: String) {
         env.events()
             .publish((symbol_short!("escrow"), symbol_short!("archived")), job_id);
+    }
+
+    pub fn emergency_freeze_initiated(env: &Env, admin: Address, unlock_timestamp: u64) {
+        env.events()
+            .publish((symbol_short!("emerg"), symbol_short!("freeze")), (admin, unlock_timestamp));
+    }
+
+    pub fn emergency_freeze_lifted(env: &Env, admin: Address) {
+        env.events()
+            .publish((symbol_short!("emerg"), symbol_short!("unfreeze")), admin);
+    }
+
+    pub fn audit_log_recorded(env: &Env, index: u64, action: Symbol, record_hash: BytesN<32>) {
+        env.events()
+            .publish((symbol_short!("audit"), symbol_short!("log")), (index, action, record_hash));
     }
 }

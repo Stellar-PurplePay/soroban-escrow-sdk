@@ -835,7 +835,7 @@ fn test_arbitrator_bond_slashing_mechanism() {
     env.mock_all_auths();
 
     let (
-        admin,
+        _admin,
         _treasury,
         client,
         freelancer,
@@ -1497,4 +1497,41 @@ fn test_receipt_counter_monotonic_invariant() {
     // Verify global monotonicity
     assert!(escrow_client.get_receipt_counter() > start_counter);
     assert_eq!(escrow_client.get_receipt_counter() - start_counter, 5);
+}
+
+#[test]
+fn test_admin_action_throttling_guard() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        _treasury,
+        _client,
+        _freelancer,
+        _arbitrator,
+        _token_client,
+        _token_admin,
+        _token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let new_treasury1 = Address::generate(&env);
+    let new_treasury2 = Address::generate(&env);
+
+    // First update succeeds
+    escrow_client.set_treasury(&new_treasury1);
+
+    // Immediate second update within 300s fails with RateLimitExceeded
+    let res = escrow_client.try_set_treasury(&new_treasury2);
+    assert_eq!(res, Err(Ok(EscrowError::RateLimitExceeded)));
+
+    // Advance ledger timestamp by 301 seconds
+    let now = env.ledger().timestamp();
+    env.ledger().with_mut(|li| {
+        li.timestamp = now + 301;
+    });
+
+    // Throttled cooldown elapsed; second update now succeeds
+    escrow_client.set_treasury(&new_treasury2);
 }

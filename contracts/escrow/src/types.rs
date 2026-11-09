@@ -79,5 +79,6 @@ pub enum DataKey {
     Escrow(String),
     Milestones(String),
     Deliverable(String),
+    MilestoneDeliverable(String, u32),
     DisputeBallot(String),
 }

@@ -316,6 +316,61 @@ impl EscrowContract {
         Ok(())
     }
 
+    /// Freelancer registers a cryptographic proof hash for a specific milestone ID.
+    pub fn submit_milestone_deliverable(
+        env: Env,
+        job_id: String,
+        freelancer: Address,
+        milestone_id: u32,
+        deliverable_hash: BytesN<32>,
+    ) -> Result<(), EscrowError> {
+        ensure_not_paused(&env)?;
+        freelancer.require_auth();
+
+        let escrow_key = DataKey::Escrow(job_id.clone());
+        let escrow: Escrow = env
+            .storage()
+            .persistent()
+            .get(&escrow_key)
+            .ok_or(EscrowError::EscrowNotFound)?;
+
+        if escrow.freelancer != freelancer {
+            return Err(EscrowError::Unauthorized);
+        }
+
+        if escrow.status != EscrowStatus::InProgress && escrow.status != EscrowStatus::Created {
+            return Err(EscrowError::InvalidStatus);
+        }
+
+        let milestones_key = DataKey::Milestones(job_id.clone());
+        let milestones: Vec<Milestone> = env
+            .storage()
+            .persistent()
+            .get(&milestones_key)
+            .ok_or(EscrowError::EscrowNotFound)?;
+
+        let mut found = false;
+        for ms in milestones.iter() {
+            if ms.id == milestone_id {
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            return Err(EscrowError::MilestoneNotFound);
+        }
+
+        env.storage().persistent().set(
+            &DataKey::MilestoneDeliverable(job_id.clone(), milestone_id),
+            &deliverable_hash,
+        );
+        extend_storage_ttl(&env, &job_id);
+
+        EscrowEvents::milestone_deliverable_submitted(&env, job_id, milestone_id, deliverable_hash);
+
+        Ok(())
+    }
+
     /// Client approves a milestone, releasing pro-rata funds to the freelancer less treasury fee.
     pub fn release_milestone(
         env: Env,
@@ -734,6 +789,18 @@ impl EscrowContract {
             .persistent()
             .get(&DataKey::Deliverable(job_id))
             .ok_or(EscrowError::EscrowNotFound)
+    }
+
+    /// Get registered deliverable hash for a specific milestone ID.
+    pub fn get_milestone_deliverable(
+        env: Env,
+        job_id: String,
+        milestone_id: u32,
+    ) -> Result<BytesN<32>, EscrowError> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::MilestoneDeliverable(job_id, milestone_id))
+            .ok_or(EscrowError::MilestoneNotFound)
     }
 
     /// Get escrow status badge only.

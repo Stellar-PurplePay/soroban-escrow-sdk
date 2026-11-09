@@ -36,6 +36,11 @@ impl EscrowEvents {
             .publish((symbol_short!("escrow"), symbol_short!("deliv")), (job_id, deliverable_hash));
     }
 
+    pub fn milestone_deliverable_submitted(env: &Env, job_id: String, milestone_id: u32, deliverable_hash: BytesN<32>) {
+        env.events()
+            .publish((symbol_short!("escrow"), symbol_short!("ms_deliv")), (job_id, milestone_id, deliverable_hash));
+    }
+
     pub fn milestone_released(env: &Env, job_id: String, milestone_id: u32, release_amount: i128) {
         env.events()
             .publish((symbol_short!("escrow"), symbol_short!("released")), (job_id, milestone_id, release_amount));

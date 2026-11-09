@@ -740,3 +740,57 @@ fn test_multi_arbitrator_quorum_voting() {
     assert_eq!(freelancer_gain, 297_000);
     assert_eq!(token_client.balance(&treasury), 3_000);
 }
+
+#[test]
+fn test_milestone_deliverable_submission_and_query() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        _treasury,
+        client,
+        freelancer,
+        arbitrator,
+        _token_client,
+        _token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let job_id = String::from_str(&env, "job-ms-deliverable");
+    let timeout = env.ledger().timestamp() + 10_000;
+
+    let params = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address,
+        total_amount: 1_000_000,
+        timeout_timestamp: timeout,
+        arbitrator,
+    };
+
+    let mut milestones = Vec::new(&env);
+    milestones.push_back(MilestoneInput {
+        description: String::from_str(&env, "Architecture Design"),
+        percentage: 40,
+    });
+    milestones.push_back(MilestoneInput {
+        description: String::from_str(&env, "Implementation"),
+        percentage: 60,
+    });
+
+    escrow_client.create_escrow(&job_id, &client, &params, &milestones);
+    escrow_client.start_work(&job_id, &freelancer);
+
+    // Freelancer submits deliverable for milestone 1
+    let hash_m1 = BytesN::from_array(&env, &[0x42; 32]);
+    escrow_client.submit_milestone_deliverable(&job_id, &freelancer, &1, &hash_m1);
+
+    // Verify hash query matches
+    let registered_hash = escrow_client.get_milestone_deliverable(&job_id, &1);
+    assert_eq!(registered_hash, hash_m1);
+
+    // Verify querying milestone 2 before submission fails
+    let res_m2 = escrow_client.try_get_milestone_deliverable(&job_id, &2);
+    assert_eq!(res_m2, Err(Ok(EscrowError::MilestoneNotFound)));
+}

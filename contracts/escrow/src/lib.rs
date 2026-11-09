@@ -31,6 +31,18 @@ fn ensure_not_paused(env: &Env) -> Result<(), EscrowError> {
     Ok(())
 }
 
+fn extend_storage_ttl(env: &Env, job_id: &String) {
+    env.storage().instance().extend_ttl(100_000, 200_000);
+    let escrow_key = DataKey::Escrow(job_id.clone());
+    if env.storage().persistent().has(&escrow_key) {
+        env.storage().persistent().extend_ttl(&escrow_key, 100_000, 200_000);
+    }
+    let milestones_key = DataKey::Milestones(job_id.clone());
+    if env.storage().persistent().has(&milestones_key) {
+        env.storage().persistent().extend_ttl(&milestones_key, 100_000, 200_000);
+    }
+}
+
 #[contract]
 pub struct EscrowContract;
 
@@ -237,14 +249,7 @@ impl EscrowContract {
             .persistent()
             .set(&DataKey::Milestones(job_id.clone()), &contract_milestones);
 
-        env.storage()
-            .persistent()
-            .extend_ttl(&escrow_key, 100_000, 200_000);
-        env.storage().persistent().extend_ttl(
-            &DataKey::Milestones(job_id.clone()),
-            100_000,
-            200_000,
-        );
+        extend_storage_ttl(&env, &job_id);
 
         env.events().publish(
             (symbol_short!("escrow"), symbol_short!("created")),
@@ -276,6 +281,7 @@ impl EscrowContract {
 
         escrow.status = EscrowStatus::InProgress;
         env.storage().persistent().set(&escrow_key, &escrow);
+        extend_storage_ttl(&env, &job_id);
 
         env.events()
             .publish((symbol_short!("escrow"), symbol_short!("started")), job_id);
@@ -311,6 +317,7 @@ impl EscrowContract {
         env.storage()
             .persistent()
             .set(&DataKey::Deliverable(job_id.clone()), &deliverable_hash);
+        extend_storage_ttl(&env, &job_id);
 
         env.events().publish(
             (symbol_short!("escrow"), symbol_short!("deliv")),
@@ -388,12 +395,7 @@ impl EscrowContract {
         env.storage()
             .persistent()
             .set(&milestones_key, &updated_milestones);
-        env.storage()
-            .persistent()
-            .extend_ttl(&escrow_key, 100_000, 200_000);
-        env.storage()
-            .persistent()
-            .extend_ttl(&milestones_key, 100_000, 200_000);
+        extend_storage_ttl(&env, &job_id);
 
         // Interactions: external token settlement
         let fee_bps: u32 = env.storage().instance().get(&DataKey::FeeBps).unwrap_or(0);
@@ -485,6 +487,7 @@ impl EscrowContract {
             EscrowStatus::Refunded
         };
         env.storage().persistent().set(&escrow_key, &escrow);
+        extend_storage_ttl(&env, &job_id);
 
         if remaining > 0 {
             let token_client = token::Client::new(&env, &escrow.token);
@@ -534,9 +537,7 @@ impl EscrowContract {
             let token_client = token::Client::new(&env, &escrow.token);
             token_client.transfer(&env.current_contract_address(), &escrow.client, &remaining);
         }
-        env.storage()
-            .persistent()
-            .extend_ttl(&escrow_key, 100_000, 200_000);
+        extend_storage_ttl(&env, &job_id);
 
         env.events().publish(
             (symbol_short!("escrow"), symbol_short!("timeout")),
@@ -568,6 +569,7 @@ impl EscrowContract {
 
         escrow.status = EscrowStatus::Disputed;
         env.storage().persistent().set(&escrow_key, &escrow);
+        extend_storage_ttl(&env, &job_id);
 
         env.events().publish(
             (symbol_short!("escrow"), symbol_short!("disputed")),
@@ -614,6 +616,7 @@ impl EscrowContract {
         escrow.released_amount += freelancer_award;
         escrow.status = EscrowStatus::Completed;
         env.storage().persistent().set(&escrow_key, &escrow);
+        extend_storage_ttl(&env, &job_id);
 
         let fee_bps: u32 = env.storage().instance().get(&DataKey::FeeBps).unwrap_or(0);
         let treasury: Option<Address> = env.storage().instance().get(&DataKey::Treasury);

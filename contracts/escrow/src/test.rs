@@ -1940,3 +1940,54 @@ fn test_arbitrator_bond_withdrawal() {
     assert_eq!(escrow_client.get_arbitrator_bond(&arbitrator), 0);
     assert_eq!(token_client.balance(&arbitrator), 1_000_000);
 }
+
+#[test]
+fn test_archive_completed_escrow_lifecycle() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        _treasury,
+        client,
+        freelancer,
+        arbitrator,
+        _token_client,
+        _token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let job_id = String::from_str(&env, "archive-job-1");
+    let mut milestones = Vec::new(&env);
+    milestones.push_back(MilestoneInput {
+        description: String::from_str(&env, "Sole Milestone"),
+        percentage: 100,
+    });
+
+    let params = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address.clone(),
+        total_amount: 1_000_000,
+        timeout_timestamp: env.ledger().timestamp() + 3600,
+        arbitrator: arbitrator.clone(),
+    };
+
+    escrow_client.create_escrow(&job_id, &client, &params, &milestones);
+
+    // 1. Cannot archive InProgress escrow
+    let premature_res = escrow_client.try_archive_completed_escrow(&job_id);
+    assert_eq!(premature_res.err(), Some(Ok(EscrowError::InvalidStatus)));
+
+    // 2. Release milestone so status transitions to Completed
+    escrow_client.release_milestone(&job_id, &client, &1);
+    let escrow = escrow_client.get_escrow(&job_id);
+    assert_eq!(escrow.status, EscrowStatus::Completed);
+
+    // 3. Now archive succeeds
+    escrow_client.archive_completed_escrow(&job_id);
+
+    // Milestones are cleaned up from storage
+    let milestones_res = escrow_client.try_get_milestones(&job_id);
+    assert_eq!(milestones_res.err(), Some(Ok(EscrowError::EscrowNotFound)));
+}

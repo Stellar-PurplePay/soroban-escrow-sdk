@@ -828,3 +828,60 @@ fn test_arbitrator_registration_and_staking_bond() {
     escrow_client.register_arbitrator(&arbitrator, &token_address, &100_000);
     assert_eq!(escrow_client.get_arbitrator_bond(&arbitrator), 400_000);
 }
+
+#[test]
+fn test_arbitrator_bond_slashing_mechanism() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        admin,
+        _treasury,
+        client,
+        freelancer,
+        arbitrator,
+        token_client,
+        token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    // Mint tokens to arbitrator
+    token_admin.mint(&arbitrator, &500_000);
+    escrow_client.register_arbitrator(&arbitrator, &token_address, &500_000);
+    assert_eq!(escrow_client.get_arbitrator_bond(&arbitrator), 500_000);
+
+    let client_initial = token_client.balance(&client);
+
+    // Non-admin attempting to slash fails
+    let non_admin_res = escrow_client.try_slash_arbitrator_bond(
+        &freelancer,
+        &arbitrator,
+        &client,
+        &token_address,
+        &100_000,
+    );
+    assert_eq!(non_admin_res, Err(Ok(EscrowError::Unauthorized)));
+
+    // Slashing more than available bond fails
+    let excess_res = escrow_client.try_slash_arbitrator_bond(
+        &admin,
+        &arbitrator,
+        &client,
+        &token_address,
+        &600_000,
+    );
+    assert_eq!(excess_res, Err(Ok(EscrowError::InsufficientBond)));
+
+    // Admin slashes 200,000 bond to client
+    escrow_client.slash_arbitrator_bond(
+        &admin,
+        &arbitrator,
+        &client,
+        &token_address,
+        &200_000,
+    );
+
+    assert_eq!(escrow_client.get_arbitrator_bond(&arbitrator), 300_000);
+    assert_eq!(token_client.balance(&client) - client_initial, 200_000);
+}

@@ -75,4 +75,9 @@ impl EscrowEvents {
         env.events()
             .publish((symbol_short!("arb"), symbol_short!("bonded")), (arbitrator, bond_amount));
     }
+
+    pub fn arbitrator_bond_slashed(env: &Env, arbitrator: Address, recipient: Address, slash_amount: i128) {
+        env.events()
+            .publish((symbol_short!("arb"), symbol_short!("slashed")), (arbitrator, recipient, slash_amount));
+    }
 }

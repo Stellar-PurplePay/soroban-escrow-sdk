@@ -173,6 +173,48 @@ impl EscrowContract {
         Ok(())
     }
 
+    /// Slash an arbitrator's bond for proven misconduct and transfer penalty to recipient (admin only).
+    pub fn slash_arbitrator_bond(
+        env: Env,
+        admin: Address,
+        arbitrator: Address,
+        recipient: Address,
+        token: Address,
+        slash_amount: i128,
+    ) -> Result<(), EscrowError> {
+        ensure_not_paused(&env)?;
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(EscrowError::NotInitialized)?;
+        if stored_admin != admin {
+            return Err(EscrowError::Unauthorized);
+        }
+        admin.require_auth();
+
+        if slash_amount <= 0 {
+            return Err(EscrowError::InvalidAmount);
+        }
+
+        let bond_key = DataKey::ArbitratorBond(arbitrator.clone());
+        let current_bond: i128 = env.storage().persistent().get(&bond_key).unwrap_or(0);
+
+        if current_bond < slash_amount {
+            return Err(EscrowError::InsufficientBond);
+        }
+
+        let new_total = current_bond - slash_amount;
+        env.storage().persistent().set(&bond_key, &new_total);
+
+        let token_client = token::Client::new(&env, &token);
+        token_client.transfer(&env.current_contract_address(), &recipient, &slash_amount);
+
+        EscrowEvents::arbitrator_bond_slashed(&env, arbitrator, recipient, slash_amount);
+
+        Ok(())
+    }
+
     /// Create an escrow with optional milestones and lock funds from the client into contract custody.
     pub fn create_escrow(
         env: Env,

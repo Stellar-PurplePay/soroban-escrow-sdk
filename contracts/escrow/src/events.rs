@@ -70,4 +70,9 @@ impl EscrowEvents {
         env.events()
             .publish((symbol_short!("escrow"), symbol_short!("resolved")), (job_id, client_award, freelancer_award));
     }
+
+    pub fn arbitrator_registered(env: &Env, arbitrator: Address, bond_amount: i128) {
+        env.events()
+            .publish((symbol_short!("arb"), symbol_short!("bonded")), (arbitrator, bond_amount));
+    }
 }

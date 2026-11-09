@@ -24,4 +24,7 @@ pub enum EscrowError {
     InvalidMilestoneData = 18,
     ContractPaused = 19,
     ContractNotPaused = 20,
+    ArbitratorAlreadyRegistered = 21,
+    InsufficientBond = 22,
+    ArbitratorNotFound = 23,
 }

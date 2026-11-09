@@ -794,3 +794,37 @@ fn test_milestone_deliverable_submission_and_query() {
     let res_m2 = escrow_client.try_get_milestone_deliverable(&job_id, &2);
     assert_eq!(res_m2, Err(Ok(EscrowError::MilestoneNotFound)));
 }
+
+#[test]
+fn test_arbitrator_registration_and_staking_bond() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        _treasury,
+        _client,
+        _freelancer,
+        arbitrator,
+        token_client,
+        token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    // Initial bond is 0
+    assert_eq!(escrow_client.get_arbitrator_bond(&arbitrator), 0);
+
+    // Mint tokens to arbitrator for staking
+    token_admin.mint(&arbitrator, &500_000);
+
+    // Arbitrator deposits 300,000 bond
+    escrow_client.register_arbitrator(&arbitrator, &token_address, &300_000);
+
+    assert_eq!(escrow_client.get_arbitrator_bond(&arbitrator), 300_000);
+    assert_eq!(token_client.balance(&arbitrator), 200_000);
+
+    // Arbitrator tops up another 100,000 bond
+    escrow_client.register_arbitrator(&arbitrator, &token_address, &100_000);
+    assert_eq!(escrow_client.get_arbitrator_bond(&arbitrator), 400_000);
+}

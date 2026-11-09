@@ -145,6 +145,34 @@ impl EscrowContract {
         Ok(())
     }
 
+    /// Register an arbitrator by depositing a staking bond.
+    pub fn register_arbitrator(
+        env: Env,
+        arbitrator: Address,
+        token: Address,
+        bond_amount: i128,
+    ) -> Result<(), EscrowError> {
+        ensure_not_paused(&env)?;
+        arbitrator.require_auth();
+
+        if bond_amount <= 0 {
+            return Err(EscrowError::InvalidAmount);
+        }
+
+        let bond_key = DataKey::ArbitratorBond(arbitrator.clone());
+        let current_bond: i128 = env.storage().persistent().get(&bond_key).unwrap_or(0);
+
+        let token_client = token::Client::new(&env, &token);
+        token_client.transfer(&arbitrator, &env.current_contract_address(), &bond_amount);
+
+        let new_total = current_bond + bond_amount;
+        env.storage().persistent().set(&bond_key, &new_total);
+
+        EscrowEvents::arbitrator_registered(&env, arbitrator, new_total);
+
+        Ok(())
+    }
+
     /// Create an escrow with optional milestones and lock funds from the client into contract custody.
     pub fn create_escrow(
         env: Env,
@@ -842,5 +870,13 @@ impl EscrowContract {
             .persistent()
             .get(&DataKey::DisputeBallot(job_id))
             .unwrap_or_else(|| Vec::new(&env))
+    }
+
+    /// Query current bonded stake of an arbitrator.
+    pub fn get_arbitrator_bond(env: Env, arbitrator: Address) -> i128 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ArbitratorBond(arbitrator))
+            .unwrap_or(0)
     }
 }

@@ -81,4 +81,5 @@ pub enum DataKey {
     Deliverable(String),
     MilestoneDeliverable(String, u32),
     DisputeBallot(String),
+    ArbitratorBond(Address),
 }

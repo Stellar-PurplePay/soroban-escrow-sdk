@@ -121,6 +121,22 @@ describe("EscrowClient", () => {
       }).toThrow(ValidationError);
     });
 
+    it("should prepare valid submit_milestone_deliverable payload with milestoneId", () => {
+      const validHash = "b".repeat(64);
+      const payload = client.prepareSubmitMilestoneDeliverable("job-1", validFreelancerAddress, 2, validHash);
+      expect(payload.method).toBe("submit_milestone_deliverable");
+      expect(payload.args.job_id).toBe("job-1");
+      expect(payload.args.milestone_id).toBe(2);
+      expect(payload.args.deliverable_hash).toBe(validHash);
+    });
+
+    it("should reject invalid milestoneId in prepareSubmitMilestoneDeliverable", () => {
+      const validHash = "c".repeat(64);
+      expect(() => {
+        client.prepareSubmitMilestoneDeliverable("job-1", validFreelancerAddress, 0, validHash);
+      }).toThrow(ValidationError);
+    });
+
     it("should prepare release_milestone payload", () => {
       const payload = client.prepareReleaseMilestone("job-1", validClientAddress, 1);
       expect(payload.method).toBe("release_milestone");

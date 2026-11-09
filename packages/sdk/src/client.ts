@@ -123,6 +123,38 @@ export class EscrowClient {
   }
 
   /**
+   * Prepare parameters for submitting deliverable proof for a specific milestone ID.
+   */
+  public prepareSubmitMilestoneDeliverable(
+    jobId: string,
+    freelancerAddress: string,
+    milestoneId: number,
+    deliverableHashHex: string
+  ) {
+    if (!jobId) throw new ValidationError("jobId is required");
+    if (!isValidStellarAddress(freelancerAddress)) {
+      throw new ValidationError(`Invalid freelancer address: ${freelancerAddress}`);
+    }
+    if (!Number.isInteger(milestoneId) || milestoneId <= 0) {
+      throw new ValidationError("milestoneId must be a positive integer");
+    }
+    if (!/^[0-9a-fA-F]{64}$/.test(deliverableHashHex)) {
+      throw new ValidationError("deliverableHashHex must be a 32-byte hexadecimal string (64 characters)");
+    }
+
+    return {
+      contractId: this.contractId,
+      method: "submit_milestone_deliverable",
+      args: {
+        job_id: jobId,
+        freelancer: freelancerAddress,
+        milestone_id: milestoneId,
+        deliverable_hash: deliverableHashHex,
+      },
+    };
+  }
+
+  /**
    * Prepare parameters for approving and releasing a milestone payout.
    */
   public prepareReleaseMilestone(jobId: string, clientAddress: string, milestoneId: number) {

@@ -243,6 +243,44 @@ describe("EscrowClient", () => {
       expect(() => client.prepareSetAdmin("bad-address")).toThrow(/Invalid new admin address/);
     });
 
+    it("should prepare valid register_arbitrator payload with positive bond", () => {
+      const payload = client.prepareRegisterArbitrator(
+        validArbitratorAddress,
+        validTokenAddress,
+        50000000n
+      );
+      expect(payload.method).toBe("register_arbitrator");
+      expect(payload.args.arbitrator).toBe(validArbitratorAddress);
+      expect(payload.args.bond_amount).toBe(50000000n);
+
+      expect(() =>
+        client.prepareRegisterArbitrator(validArbitratorAddress, validTokenAddress, 0n)
+      ).toThrow("Bond amount must be strictly positive");
+    });
+
+    it("should prepare valid slash_arbitrator_bond payload with admin auth", () => {
+      const payload = client.prepareSlashArbitrator(
+        validClientAddress,
+        validArbitratorAddress,
+        validFreelancerAddress,
+        validTokenAddress,
+        25000000n
+      );
+      expect(payload.method).toBe("slash_arbitrator_bond");
+      expect(payload.args.admin).toBe(validClientAddress);
+      expect(payload.args.slash_amount).toBe(25000000n);
+
+      expect(() =>
+        client.prepareSlashArbitrator(
+          validClientAddress,
+          validArbitratorAddress,
+          validFreelancerAddress,
+          validTokenAddress,
+          -10n
+        )
+      ).toThrow("Slash amount must be strictly positive");
+    });
+
     it("should estimate resources via parseResourceEstimate helper", () => {
       const estimate = client.estimateResources({
         minResourceFee: 5000,

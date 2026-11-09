@@ -363,6 +363,74 @@ export class EscrowClient {
   }
 
   /**
+   * Prepare parameters for depositing an arbitrator staking bond.
+   */
+  public prepareRegisterArbitrator(
+    arbitratorAddress: string,
+    tokenAddress: string,
+    bondAmount: bigint
+  ) {
+    if (!isValidStellarAddress(arbitratorAddress)) {
+      throw new ValidationError(`Invalid arbitrator address: ${arbitratorAddress}`);
+    }
+    if (!isValidStellarAddress(tokenAddress)) {
+      throw new ValidationError(`Invalid token address: ${tokenAddress}`);
+    }
+    if (bondAmount <= 0n) {
+      throw new ValidationError("Bond amount must be strictly positive");
+    }
+
+    return {
+      contractId: this.contractId,
+      method: "register_arbitrator",
+      args: {
+        arbitrator: arbitratorAddress,
+        token: tokenAddress,
+        bond_amount: bondAmount,
+      },
+    };
+  }
+
+  /**
+   * Prepare parameters for slashing an arbitrator's bond for misconduct (admin only).
+   */
+  public prepareSlashArbitrator(
+    adminAddress: string,
+    arbitratorAddress: string,
+    recipientAddress: string,
+    tokenAddress: string,
+    slashAmount: bigint
+  ) {
+    if (!isValidStellarAddress(adminAddress)) {
+      throw new ValidationError(`Invalid admin address: ${adminAddress}`);
+    }
+    if (!isValidStellarAddress(arbitratorAddress)) {
+      throw new ValidationError(`Invalid arbitrator address: ${arbitratorAddress}`);
+    }
+    if (!isValidStellarAddress(recipientAddress)) {
+      throw new ValidationError(`Invalid recipient address: ${recipientAddress}`);
+    }
+    if (!isValidStellarAddress(tokenAddress)) {
+      throw new ValidationError(`Invalid token address: ${tokenAddress}`);
+    }
+    if (slashAmount <= 0n) {
+      throw new ValidationError("Slash amount must be strictly positive");
+    }
+
+    return {
+      contractId: this.contractId,
+      method: "slash_arbitrator_bond",
+      args: {
+        admin: adminAddress,
+        arbitrator: arbitratorAddress,
+        recipient: recipientAddress,
+        token: tokenAddress,
+        slash_amount: slashAmount,
+      },
+    };
+  }
+
+  /**
    * Estimates resource costs and inclusion fees from a Soroban simulation result.
    */
   public estimateResources(

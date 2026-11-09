@@ -17,6 +17,7 @@ import {
   BatchPaymentSummary,
   PartitionOptions,
 } from "./batchPayment";
+import { toStroops } from "./utils/stroopPrecision";
 
 export class EscrowClient {
   public readonly rpcUrl: string;
@@ -180,6 +181,48 @@ export class EscrowClient {
         job_id: jobId,
         client: clientAddress,
         milestone_id: milestoneId,
+      },
+    };
+  }
+
+  /**
+   * Prepare parameters for releasing a partial payout of a milestone.
+   */
+  public prepareReleasePartialMilestone(
+    jobId: string,
+    clientAddress: string,
+    milestoneId: number,
+    amount: bigint | number | string
+  ) {
+    if (!jobId) throw new ValidationError("jobId is required");
+    if (!isValidStellarAddress(clientAddress)) {
+      throw new ValidationError(`Invalid client address: ${clientAddress}`);
+    }
+    if (!Number.isInteger(milestoneId) || milestoneId <= 0) {
+      throw new ValidationError("milestoneId must be a positive integer");
+    }
+
+    let amountStroops: bigint;
+    if (typeof amount === "bigint") {
+      if (amount <= 0n) {
+        throw new ValidationError("Partial release amount must be greater than zero");
+      }
+      amountStroops = amount;
+    } else {
+      amountStroops = toStroops(amount);
+      if (amountStroops <= 0n) {
+        throw new ValidationError("Partial release amount must be greater than zero");
+      }
+    }
+
+    return {
+      contractId: this.contractId,
+      method: "release_partial_milestone",
+      args: {
+        job_id: jobId,
+        client: clientAddress,
+        milestone_id: milestoneId,
+        amount: amountStroops,
       },
     };
   }

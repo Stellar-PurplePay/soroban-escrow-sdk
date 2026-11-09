@@ -143,6 +143,36 @@ describe("EscrowClient", () => {
       expect(payload.args.milestone_id).toBe(1);
     });
 
+    it("should prepare release_partial_milestone payload with Stroop conversion", () => {
+      const payload = client.prepareReleasePartialMilestone(
+        "job-1",
+        validClientAddress,
+        1,
+        "25.5000000"
+      );
+      expect(payload.method).toBe("release_partial_milestone");
+      expect(payload.args.job_id).toBe("job-1");
+      expect(payload.args.client).toBe(validClientAddress);
+      expect(payload.args.milestone_id).toBe(1);
+      expect(payload.args.amount).toBe(255000000n);
+    });
+
+    it("should accept BigInt amount in prepareReleasePartialMilestone", () => {
+      const payload = client.prepareReleasePartialMilestone(
+        "job-1",
+        validClientAddress,
+        2,
+        500000n
+      );
+      expect(payload.args.amount).toBe(500000n);
+    });
+
+    it("should reject negative amount in prepareReleasePartialMilestone", () => {
+      expect(() => {
+        client.prepareReleasePartialMilestone("job-1", validClientAddress, 1, "-10");
+      }).toThrow();
+    });
+
     it("should prepare set_milestone_deadline payload", () => {
       const payload = client.prepareSetMilestoneDeadline(
         "job-1",

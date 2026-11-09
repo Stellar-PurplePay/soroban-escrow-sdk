@@ -19,6 +19,9 @@
 - **Cryptographic Deliverable Proofs**: Client-side SHA-256 deliverable payload hashing with timestamped salt verification and granular per-milestone submissions.
 - **Stroop Precision Math**: Exact BigInt Stroop arithmetic preventing IEEE-754 floating-point inaccuracies.
 - **Contract & RPC Health Diagnostics**: Automated node pinging, ledger sequence tracking, and paused status reporting.
+- **Arbitrator Staking & Slashing**: Decentralized bond registration, balance queries, and malicious arbitrator penalty slashing.
+- **Dispute Evidence Hashing**: Tamper-proof 32-byte cryptographic evidence logging anchored directly to on-chain state.
+- **Batch Payout Partitioning**: Automatic splitting of multi-recipient transactions conforming to Stellar's 100 operations/envelope ceiling with Stroop fee estimation.
 
 ---
 
@@ -119,6 +122,49 @@ const xlmString = fromStroops(155_000_000n); // "15.5000000"
 ```typescript
 const health = await client.getContractHealth();
 console.log(`Responsive: ${health.isResponsive}, Latency: ${health.rpcLatencyMs}ms, Ledger: #${health.latestLedgerSequence}`);
+```
+
+### 9. Arbitrator Staking Bond & Penalty Slashing
+
+```typescript
+// Register arbitrator with 10,000 Stroop bond deposit
+const registerPayload = client.prepareRegisterArbitrator(
+  arbitratorAddress,
+  10_000n
+);
+
+// Admin slashes compromised or unresponsive arbitrator bond
+const slashPayload = client.prepareSlashArbitrator(
+  arbitratorAddress,
+  5_000n,
+  recipientAddress
+);
+```
+
+### 10. Dispute Evidence Submission
+
+```typescript
+// Anchor 32-byte cryptographic evidence hash on-chain
+const evidencePayload = client.prepareSubmitDisputeEvidence(
+  "job-101",
+  submitterAddress,
+  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+);
+```
+
+### 11. Batch Payment Partitioning (100 Ops Envelope Limit)
+
+```typescript
+import { partitionPayments } from "@stellar-purplepay/escrow-sdk";
+
+const batch = client.prepareBatchPayments([
+  { destination: freelancerA, amount: "100.0" },
+  { destination: freelancerB, amount: "250.0" },
+]);
+
+console.log(`Total Operations: ${batch.totalOperations}`);
+console.log(`Required Envelopes: ${batch.requiredChunks}`);
+console.log(`Network Fee: ${batch.totalEstimatedFeeStroops} Stroops`);
 ```
 
 ---

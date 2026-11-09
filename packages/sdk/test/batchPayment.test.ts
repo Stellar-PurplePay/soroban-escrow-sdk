@@ -99,4 +99,35 @@ describe("partitionPayments", () => {
       )
     ).toThrow(`maxOpsPerChunk must be between 1 and ${MAX_OPERATIONS_PER_TX}`);
   });
+
+  it("verifies chunk boundary and total amount conservation properties across random batch sizes", () => {
+    for (let trial = 0; trial < 25; trial++) {
+      const batchSize = 1 + Math.floor(Math.random() * 350); // 1 to 350 payments
+      const maxOps = 10 + Math.floor(Math.random() * 91); // 10 to 100 max ops
+
+      const payments: PaymentItem[] = Array.from({ length: batchSize }, (_, i) => ({
+        destination: i % 2 === 0 ? dummyRecipient1 : dummyRecipient2,
+        amount: BigInt(1 + Math.floor(Math.random() * 100_000_000)),
+      }));
+
+      const summary = partitionPayments(payments, { maxOpsPerChunk: maxOps });
+
+      expect(summary.totalPayments).toBe(batchSize);
+      expect(summary.requiredChunks).toBe(Math.ceil(batchSize / maxOps));
+
+      let accumulatedOps = 0;
+      let accumulatedStroops = 0n;
+
+      for (const chunk of summary.chunks) {
+        expect(chunk.operationCount).toBeLessThanOrEqual(maxOps);
+        expect(chunk.operationCount).toBeGreaterThan(0);
+        accumulatedOps += chunk.operationCount;
+        accumulatedStroops += chunk.totalAmountStroops;
+      }
+
+      // Invariant checks
+      expect(accumulatedOps).toBe(batchSize);
+      expect(accumulatedStroops).toBe(summary.totalAmountStroops);
+    }
+  });
 });

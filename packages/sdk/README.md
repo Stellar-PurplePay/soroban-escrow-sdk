@@ -22,6 +22,8 @@
 - **Arbitrator Staking & Slashing**: Decentralized bond registration, balance queries, and malicious arbitrator penalty slashing.
 - **Dispute Evidence Hashing**: Tamper-proof 32-byte cryptographic evidence logging anchored directly to on-chain state.
 - **Batch Payout Partitioning**: Automatic splitting of multi-recipient transactions conforming to Stellar's 100 operations/envelope ceiling with Stroop fee estimation.
+- **Milestone Deadlines & Overdue Cancellation**: Enforceable milestone completion timestamps with client fund recovery on unfulfilled deadlines.
+- **Incremental Partial Releases**: Safe pro-rata releases for intermediate deliverables without full milestone finalization.
 
 ---
 
@@ -165,6 +167,55 @@ const batch = client.prepareBatchPayments([
 console.log(`Total Operations: ${batch.totalOperations}`);
 console.log(`Required Envelopes: ${batch.requiredChunks}`);
 console.log(`Network Fee: ${batch.totalEstimatedFeeStroops} Stroops`);
+```
+
+### 12. Milestone Deadlines & Overdue Cancellation
+
+```typescript
+// Client sets target completion deadline timestamp (UNIX seconds)
+const setDlPayload = client.prepareSetMilestoneDeadline(
+  "job-101",
+  clientAddress,
+  1,
+  1750000000
+);
+
+// If deadline passes without completion, client reclaims milestone funds
+const cancelPayload = client.prepareCancelExpiredMilestone(
+  "job-101",
+  clientAddress,
+  1
+);
+```
+
+### 13. Milestone Deadline Extension Negotiation
+
+```typescript
+// Client extends unapproved milestone deadline by 3 days (259,200 seconds)
+const extendPayload = client.prepareExtendMilestoneDeadline(
+  "job-101",
+  clientAddress,
+  1,
+  259_200
+);
+```
+
+### 14. Partial Milestone Releases & Progress Tracking
+
+```typescript
+// Client releases partial payment (40 XLM out of 100 XLM milestone)
+const partialPayload = client.prepareReleasePartialMilestone(
+  "job-101",
+  clientAddress,
+  1,
+  "40.0000000"
+);
+
+// Client-side helper calculating progress and completion status
+const progress = client.calculateMilestoneProgress("100.0", "40.0");
+console.log(`Completed: ${progress.percentageReleased}%`); // 40.0%
+console.log(`Remaining: ${progress.remainingXlm} XLM`); // 60.0000000 XLM
+console.log(`Is Complete: ${progress.isComplete}`); // false
 ```
 
 ---

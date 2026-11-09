@@ -55,3 +55,9 @@ export interface SimulationResult<T> {
   feeStroops: number;
   rawSimulation: any;
 }
+
+export interface ArbitratorVote {
+  arbitrator: string;
+  clientAward: bigint;
+  freelancerAward: bigint;
+}

@@ -209,6 +209,37 @@ export class EscrowClient {
   }
 
   /**
+   * Prepare parameters for casting an arbitrator dispute vote in a 2-of-3 quorum panel.
+   */
+  public prepareVoteDispute(
+    jobId: string,
+    arbitratorAddress: string,
+    clientAward: bigint,
+    freelancerAward: bigint
+  ) {
+    if (!jobId || jobId.trim().length === 0) {
+      throw new ValidationError("jobId is required");
+    }
+    if (!isValidStellarAddress(arbitratorAddress)) {
+      throw new ValidationError(`Invalid arbitrator address: ${arbitratorAddress}`);
+    }
+    if (clientAward < 0n || freelancerAward < 0n) {
+      throw new ValidationError("Awards cannot be negative");
+    }
+
+    return {
+      contractId: this.contractId,
+      method: "vote_dispute",
+      args: {
+        job_id: jobId,
+        arbitrator: arbitratorAddress,
+        client_award: clientAward,
+        freelancer_award: freelancerAward,
+      },
+    };
+  }
+
+  /**
    * Prepare parameters for emergency pause (admin only).
    */
   public preparePause() {

@@ -172,6 +172,22 @@ describe("EscrowClient", () => {
   });
 
   describe("Circuit Breaker & Mutual Cancel Payloads", () => {
+    it("should prepare valid vote_dispute payload in quorum panel", () => {
+      const payload = client.prepareVoteDispute(
+        "job-quorum-1",
+        validArbitratorAddress,
+        600000n,
+        400000n
+      );
+      expect(payload.method).toBe("vote_dispute");
+      expect(payload.args.job_id).toBe("job-quorum-1");
+      expect(payload.args.client_award).toBe(600000n);
+      expect(payload.args.freelancer_award).toBe(400000n);
+      expect(() =>
+        client.prepareVoteDispute("job", "bad-arb", 100n, 100n)
+      ).toThrow(ValidationError);
+    });
+
     it("should prepare valid pause invocation", () => {
       const payload = client.preparePause();
       expect(payload.method).toBe("pause");

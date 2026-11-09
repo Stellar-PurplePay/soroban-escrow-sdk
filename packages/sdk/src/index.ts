@@ -11,5 +11,8 @@ export * from "./hooks";
 export * from "./utils/stroopPrecision";
 export * from "./utils/explorerUrl";
 export * from "./utils/sanitizer";
+export * from "./utils/addressFormatter";
+export * from "./networkMetrics";
+export * from "./eventStreamer";
 export * from "./batchPayment";
 export * from "./client";

@@ -204,4 +204,43 @@ export class EscrowClient {
       },
     };
   }
+
+  /**
+   * Prepare parameters for emergency pause (admin only).
+   */
+  public preparePause() {
+    return {
+      contractId: this.contractId,
+      method: "pause",
+      args: {},
+    };
+  }
+
+  /**
+   * Prepare parameters for unpause (admin only).
+   */
+  public prepareUnpause() {
+    return {
+      contractId: this.contractId,
+      method: "unpause",
+      args: {},
+    };
+  }
+
+  /**
+   * Prepare parameters for mutual cancellation.
+   */
+  public prepareMutualCancel(jobId: string) {
+    if (!jobId || jobId.trim().length === 0) {
+      throw new ValidationError("jobId is required");
+    }
+
+    return {
+      contractId: this.contractId,
+      method: "mutual_cancel",
+      args: {
+        job_id: jobId,
+      },
+    };
+  }
 }

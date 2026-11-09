@@ -170,4 +170,24 @@ describe("EscrowClient", () => {
       expect(() => validateMilestones(emptyDesc)).toThrow(/Milestone description cannot be empty/);
     });
   });
+
+  describe("Circuit Breaker & Mutual Cancel Payloads", () => {
+    it("should prepare valid pause invocation", () => {
+      const payload = client.preparePause();
+      expect(payload.method).toBe("pause");
+      expect(payload.contractId).toBe(client.contractId);
+    });
+
+    it("should prepare valid unpause invocation", () => {
+      const payload = client.prepareUnpause();
+      expect(payload.method).toBe("unpause");
+      expect(payload.contractId).toBe(client.contractId);
+    });
+
+    it("should prepare valid mutual cancellation payload", () => {
+      const payload = client.prepareMutualCancel("job-mutual");
+      expect(payload.method).toBe("mutual_cancel");
+      expect(payload.args.job_id).toBe("job-mutual");
+    });
+  });
 });

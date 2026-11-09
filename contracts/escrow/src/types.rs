@@ -87,4 +87,6 @@ pub enum DataKey {
     MilestoneReleased(String, u32),
     ReceiptCounter,
     AdminActionThrottle(Symbol),
+    DisputeTimestamp(String),
+    DisputeCooldown,
 }

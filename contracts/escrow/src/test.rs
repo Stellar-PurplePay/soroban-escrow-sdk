@@ -1580,3 +1580,74 @@ fn test_timeout_minimum_grace_period_enforcement() {
     let res_valid = escrow_client.try_create_escrow(&job_id, &client, &params_valid, &milestones);
     assert!(res_valid.is_ok());
 }
+
+#[test]
+fn test_property_dispute_award_conservation() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        treasury,
+        client,
+        freelancer,
+        arbitrator,
+        token_client,
+        token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let test_matrix: [(i128, i128, i128); 6] = [
+        (1_000_000, 1_000_000, 0),         // 100% to client
+        (1_000_000, 0, 1_000_000),         // 100% to freelancer
+        (1_000_000, 500_000, 500_000),     // 50/50 split
+        (1_000_000, 250_000, 750_000),     // 25/75 split
+        (1_000_001, 333_333, 666_668),     // Odd amount with non-zero remainder
+        (9_999_999, 1, 9_999_998),         // Extreme edge split
+    ];
+
+    for (idx, (total, client_part, freelancer_part)) in test_matrix.iter().enumerate() {
+        token_admin.mint(&client, total);
+
+        let initial_client_bal = token_client.balance(&client);
+        let initial_freelancer_bal = token_client.balance(&freelancer);
+        let initial_treasury_bal = token_client.balance(&treasury);
+
+        let job_id = match idx {
+            0 => String::from_str(&env, "prop-disp-0"),
+            1 => String::from_str(&env, "prop-disp-1"),
+            2 => String::from_str(&env, "prop-disp-2"),
+            3 => String::from_str(&env, "prop-disp-3"),
+            4 => String::from_str(&env, "prop-disp-4"),
+            _ => String::from_str(&env, "prop-disp-5"),
+        };
+
+        let params = CreateEscrowParams {
+            freelancer: freelancer.clone(),
+            token: token_address.clone(),
+            total_amount: *total,
+            timeout_timestamp: env.ledger().timestamp() + 50_000,
+            arbitrator: arbitrator.clone(),
+        };
+        let milestones = Vec::new(&env);
+
+        escrow_client.create_escrow(&job_id, &client, &params, &milestones);
+        escrow_client.start_work(&job_id, &freelancer);
+        escrow_client.raise_dispute(&job_id, &client);
+
+        escrow_client.resolve_dispute(&job_id, &arbitrator, client_part, freelancer_part);
+
+        let client_gain = token_client.balance(&client) - (initial_client_bal - *total);
+        let freelancer_gain = token_client.balance(&freelancer) - initial_freelancer_bal;
+        let treasury_gain = token_client.balance(&treasury) - initial_treasury_bal;
+
+        // Conservation invariant: client received + freelancer received + fee paid strictly equals total deposited
+        assert_eq!(
+            client_gain + freelancer_gain + treasury_gain,
+            *total,
+            "Dispute funds conservation failed for test split #{}",
+            idx
+        );
+    }
+}

@@ -6,4 +6,5 @@ export * from "./milestoneBuilder";
 export * from "./freighter";
 export * from "./estimator";
 export * from "./rpcRetry";
+export * from "./hooks/useEscrowState";
 export * from "./client";

@@ -61,3 +61,10 @@ export interface ArbitratorVote {
   clientAward: bigint;
   freelancerAward: bigint;
 }
+
+export interface EscrowProgress {
+  totalAmount: bigint;
+  releasedAmount: bigint;
+  percentageReleased: number;
+  status: EscrowStatus;
+}

@@ -173,6 +173,28 @@ describe("EscrowClient", () => {
       }).toThrow();
     });
 
+    it("should calculate milestone progress and percentage released", () => {
+      const progress = client.calculateMilestoneProgress("100.0000000", "25.0000000");
+      expect(progress.totalStroops).toBe(1000000000n);
+      expect(progress.releasedStroops).toBe(250000000n);
+      expect(progress.remainingStroops).toBe(750000000n);
+      expect(progress.percentageReleased).toBe(25.0);
+      expect(progress.isComplete).toBe(false);
+    });
+
+    it("should identify complete milestone progress", () => {
+      const progress = client.calculateMilestoneProgress("50.0", "50.0");
+      expect(progress.percentageReleased).toBe(100.0);
+      expect(progress.remainingStroops).toBe(0n);
+      expect(progress.isComplete).toBe(true);
+    });
+
+    it("should reject released amount exceeding total milestone amount", () => {
+      expect(() => {
+        client.calculateMilestoneProgress("50.0", "60.0");
+      }).toThrow(ValidationError);
+    });
+
     it("should prepare set_milestone_deadline payload", () => {
       const payload = client.prepareSetMilestoneDeadline(
         "job-1",

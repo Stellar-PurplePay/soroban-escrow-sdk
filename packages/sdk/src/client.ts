@@ -17,7 +17,7 @@ import {
   BatchPaymentSummary,
   PartitionOptions,
 } from "./batchPayment";
-import { toStroops } from "./utils/stroopPrecision";
+import { toStroops, fromStroops } from "./utils/stroopPrecision";
 
 export class EscrowClient {
   public readonly rpcUrl: string;
@@ -224,6 +224,39 @@ export class EscrowClient {
         milestone_id: milestoneId,
         amount: amountStroops,
       },
+    };
+  }
+
+  /**
+   * Calculates the percentage completed and remaining balance for a milestone.
+   */
+  public calculateMilestoneProgress(
+    totalAmount: string | number | bigint,
+    releasedAmount: string | number | bigint = 0n
+  ) {
+    const totalStroops = typeof totalAmount === "bigint" ? totalAmount : toStroops(totalAmount);
+    const releasedStroops = typeof releasedAmount === "bigint" ? releasedAmount : toStroops(releasedAmount);
+
+    if (totalStroops <= 0n) {
+      throw new ValidationError("Total milestone amount must be greater than zero");
+    }
+    if (releasedStroops < 0n || releasedStroops > totalStroops) {
+      throw new ValidationError("Released amount cannot be negative or exceed total amount");
+    }
+
+    const remainingStroops = totalStroops - releasedStroops;
+    const percentageReleased = Number((releasedStroops * 10000n) / totalStroops) / 100;
+    const isComplete = remainingStroops === 0n;
+
+    return {
+      totalStroops,
+      releasedStroops,
+      remainingStroops,
+      totalXlm: fromStroops(totalStroops),
+      releasedXlm: fromStroops(releasedStroops),
+      remainingXlm: fromStroops(remainingStroops),
+      percentageReleased,
+      isComplete,
     };
   }
 

@@ -969,4 +969,70 @@ impl EscrowContract {
             .get(&DataKey::DisputeEvidence(job_id, caller))
             .ok_or(EscrowError::EscrowNotFound)
     }
+
+    /// Sets a completion deadline timestamp for a specific milestone.
+    /// Can only be called by the client while the contract is active.
+    pub fn set_milestone_deadline(
+        env: Env,
+        job_id: String,
+        client: Address,
+        milestone_id: u32,
+        deadline: u64,
+    ) -> Result<(), EscrowError> {
+        ensure_not_paused(&env)?;
+        client.require_auth();
+
+        let escrow = Self::get_escrow(env.clone(), job_id.clone())?;
+        if escrow.client != client {
+            return Err(EscrowError::Unauthorized);
+        }
+
+        if escrow.status != EscrowStatus::InProgress && escrow.status != EscrowStatus::Created {
+            return Err(EscrowError::InvalidStatus);
+        }
+
+        let milestone = Self::get_milestone(env.clone(), job_id.clone(), milestone_id)?;
+        if milestone.approved {
+            return Err(EscrowError::MilestoneAlreadyApproved);
+        }
+
+        if deadline <= env.ledger().timestamp() {
+            return Err(EscrowError::InvalidDeadline);
+        }
+
+        extend_storage_ttl(&env, &job_id);
+        let key = DataKey::MilestoneDeadline(job_id.clone(), milestone_id);
+        env.storage().persistent().set(&key, &deadline);
+        env.storage().persistent().extend_ttl(&key, 100_000, 200_000);
+
+        EscrowEvents::milestone_deadline_set(&env, job_id, milestone_id, deadline);
+        Ok(())
+    }
+
+    /// Query the configured deadline for a milestone.
+    pub fn get_milestone_deadline(
+        env: Env,
+        job_id: String,
+        milestone_id: u32,
+    ) -> Option<u64> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::MilestoneDeadline(job_id, milestone_id))
+    }
+
+    /// Check if a milestone deadline has expired without milestone approval.
+    pub fn is_milestone_expired(
+        env: Env,
+        job_id: String,
+        milestone_id: u32,
+    ) -> bool {
+        if let Some(deadline) = Self::get_milestone_deadline(env.clone(), job_id.clone(), milestone_id) {
+            if let Ok(milestone) = Self::get_milestone(env.clone(), job_id, milestone_id) {
+                if !milestone.approved && env.ledger().timestamp() >= deadline {
+                    return true;
+                }
+            }
+        }
+        false
+    }
 }

@@ -945,3 +945,68 @@ fn test_dispute_evidence_submission_and_query() {
     let outsider_res = escrow_client.try_submit_dispute_evidence(&job_id, &outsider, &client_hash);
     assert_eq!(outsider_res, Err(Ok(EscrowError::Unauthorized)));
 }
+
+#[test]
+fn test_milestone_deadlines_and_overdue_queries() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        _treasury,
+        client,
+        freelancer,
+        arbitrator,
+        _token_client,
+        _token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let job_id = String::from_str(&env, "job-deadline-test");
+    let base_time = env.ledger().timestamp();
+    let timeout = base_time + 50_000;
+
+    let params = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address,
+        total_amount: 1_000_000,
+        timeout_timestamp: timeout,
+        arbitrator: arbitrator.clone(),
+    };
+
+    let mut milestones = Vec::new(&env);
+    milestones.push_back(MilestoneInput {
+        description: String::from_str(&env, "Milestone 1"),
+        percentage: 50,
+    });
+    milestones.push_back(MilestoneInput {
+        description: String::from_str(&env, "Milestone 2"),
+        percentage: 50,
+    });
+
+    escrow_client.create_escrow(&job_id, &client, &params, &milestones);
+    escrow_client.start_work(&job_id, &freelancer);
+
+    // Initial check: no deadline set
+    assert_eq!(escrow_client.get_milestone_deadline(&job_id, &1), None);
+    assert_eq!(escrow_client.is_milestone_expired(&job_id, &1), false);
+
+    // Setting past deadline fails
+    let past_res = escrow_client.try_set_milestone_deadline(&job_id, &client, &1, &base_time);
+    assert_eq!(past_res, Err(Ok(EscrowError::InvalidDeadline)));
+
+    // Setting valid future deadline succeeds
+    let target_deadline = base_time + 3600;
+    escrow_client.set_milestone_deadline(&job_id, &client, &1, &target_deadline);
+    assert_eq!(escrow_client.get_milestone_deadline(&job_id, &1), Some(target_deadline));
+    assert_eq!(escrow_client.is_milestone_expired(&job_id, &1), false);
+
+    // Advance time past deadline
+    env.ledger().set_timestamp(target_deadline + 10);
+    assert_eq!(escrow_client.is_milestone_expired(&job_id, &1), true);
+
+    // After approval, milestone is no longer considered expired
+    escrow_client.release_milestone(&job_id, &client, &1);
+    assert_eq!(escrow_client.is_milestone_expired(&job_id, &1), false);
+}

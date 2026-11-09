@@ -85,4 +85,9 @@ impl EscrowEvents {
         env.events()
             .publish((symbol_short!("escrow"), symbol_short!("evidence")), (job_id, caller, evidence_hash));
     }
+
+    pub fn milestone_deadline_set(env: &Env, job_id: String, milestone_id: u32, deadline: u64) {
+        env.events()
+            .publish((symbol_short!("escrow"), symbol_short!("ms_dl")), (job_id, milestone_id, deadline));
+    }
 }

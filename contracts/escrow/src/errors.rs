@@ -27,4 +27,7 @@ pub enum EscrowError {
     ArbitratorAlreadyRegistered = 21,
     InsufficientBond = 22,
     ArbitratorNotFound = 23,
+    MilestoneNotExpired = 24,
+    MilestoneDeadlinePassed = 25,
+    InvalidDeadline = 26,
 }

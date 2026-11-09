@@ -90,4 +90,9 @@ impl EscrowEvents {
         env.events()
             .publish((symbol_short!("escrow"), symbol_short!("ms_dl")), (job_id, milestone_id, deadline));
     }
+
+    pub fn milestone_cancelled(env: &Env, job_id: String, milestone_id: u32, refund_amount: i128) {
+        env.events()
+            .publish((symbol_short!("escrow"), symbol_short!("ms_canc")), (job_id, milestone_id, refund_amount));
+    }
 }

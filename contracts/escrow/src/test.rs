@@ -1010,3 +1010,67 @@ fn test_milestone_deadlines_and_overdue_queries() {
     escrow_client.release_milestone(&job_id, &client, &1);
     assert_eq!(escrow_client.is_milestone_expired(&job_id, &1), false);
 }
+
+#[test]
+fn test_cancel_expired_milestone_refund() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        _treasury,
+        client,
+        freelancer,
+        arbitrator,
+        token_client,
+        _token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let job_id = String::from_str(&env, "job-cancel-expired");
+    let base_time = env.ledger().timestamp();
+    let timeout = base_time + 50_000;
+
+    let params = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address,
+        total_amount: 1_000_000,
+        timeout_timestamp: timeout,
+        arbitrator: arbitrator.clone(),
+    };
+
+    let mut milestones = Vec::new(&env);
+    milestones.push_back(MilestoneInput {
+        description: String::from_str(&env, "Milestone 1"),
+        percentage: 40,
+    });
+    milestones.push_back(MilestoneInput {
+        description: String::from_str(&env, "Milestone 2"),
+        percentage: 60,
+    });
+
+    escrow_client.create_escrow(&job_id, &client, &params, &milestones);
+    escrow_client.start_work(&job_id, &freelancer);
+
+    let initial_client_balance = token_client.balance(&client);
+
+    // Set deadline for milestone 1
+    let dl1 = base_time + 1000;
+    escrow_client.set_milestone_deadline(&job_id, &client, &1, &dl1);
+
+    // Try cancelling before deadline -> fails with MilestoneNotExpired
+    let early_cancel = escrow_client.try_cancel_expired_milestone(&job_id, &client, &1);
+    assert_eq!(early_cancel, Err(Ok(EscrowError::MilestoneNotExpired)));
+
+    // Fast-forward past deadline
+    env.ledger().set_timestamp(dl1 + 5);
+
+    // Cancel expired milestone 1 -> client gets refunded 400_000
+    escrow_client.cancel_expired_milestone(&job_id, &client, &1);
+    assert_eq!(token_client.balance(&client), initial_client_balance + 400_000);
+
+    // Cannot cancel again
+    let double_cancel = escrow_client.try_cancel_expired_milestone(&job_id, &client, &1);
+    assert_eq!(double_cancel, Err(Ok(EscrowError::MilestoneAlreadyApproved)));
+}

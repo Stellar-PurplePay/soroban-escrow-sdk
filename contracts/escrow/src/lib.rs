@@ -1035,4 +1035,79 @@ impl EscrowContract {
         }
         false
     }
+
+    /// Cancels an unfulfilled milestone whose deadline has expired, refunding its allocated funds to the client.
+    pub fn cancel_expired_milestone(
+        env: Env,
+        job_id: String,
+        client: Address,
+        milestone_id: u32,
+    ) -> Result<(), EscrowError> {
+        ensure_not_paused(&env)?;
+        client.require_auth();
+
+        let mut escrow = Self::get_escrow(env.clone(), job_id.clone())?;
+        if escrow.client != client {
+            return Err(EscrowError::Unauthorized);
+        }
+
+        if escrow.status != EscrowStatus::InProgress && escrow.status != EscrowStatus::Created {
+            return Err(EscrowError::InvalidStatus);
+        }
+
+        let milestone = Self::get_milestone(env.clone(), job_id.clone(), milestone_id)?;
+        if milestone.approved {
+            return Err(EscrowError::MilestoneAlreadyApproved);
+        }
+
+        if !Self::is_milestone_expired(env.clone(), job_id.clone(), milestone_id) {
+            return Err(EscrowError::MilestoneNotExpired);
+        }
+
+        let mut milestones = Self::get_milestones(env.clone(), job_id.clone())?;
+        let mut found = false;
+        let mut refund_amount: i128 = 0;
+
+        for i in 0..milestones.len() {
+            let mut m = milestones.get(i).unwrap();
+            if m.id == milestone_id {
+                if m.approved {
+                    return Err(EscrowError::MilestoneAlreadyApproved);
+                }
+                m.approved = true;
+                refund_amount = m.amount;
+                milestones.set(i, m);
+                found = true;
+                break;
+            }
+        }
+
+        if !found {
+            return Err(EscrowError::MilestoneNotFound);
+        }
+
+        extend_storage_ttl(&env, &job_id);
+
+        // Refund milestone amount back to client without fee
+        token::Client::new(&env, &escrow.token).transfer(
+            &env.current_contract_address(),
+            &client,
+            &refund_amount,
+        );
+
+        escrow.released_amount += refund_amount;
+        if escrow.released_amount >= escrow.total_amount {
+            escrow.status = EscrowStatus::Completed;
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Escrow(job_id.clone()), &escrow);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Milestones(job_id.clone()), &milestones);
+
+        EscrowEvents::milestone_cancelled(&env, job_id, milestone_id, refund_amount);
+        Ok(())
+    }
 }

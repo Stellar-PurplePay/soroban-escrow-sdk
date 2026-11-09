@@ -1900,3 +1900,43 @@ fn test_property_receipt_monotonic_concurrency() {
     expected_receipt_count += 1;
     assert_eq!(escrow_client.get_receipt_counter(), expected_receipt_count);
 }
+
+#[test]
+fn test_arbitrator_bond_withdrawal() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        _treasury,
+        _client,
+        _freelancer,
+        arbitrator,
+        token_client,
+        token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    token_admin.mint(&arbitrator, &1_000_000);
+    assert_eq!(token_client.balance(&arbitrator), 1_000_000);
+
+    // 1. Register and stake 600,000 bond
+    escrow_client.register_arbitrator(&arbitrator, &token_address, &600_000);
+    assert_eq!(escrow_client.get_arbitrator_bond(&arbitrator), 600_000);
+    assert_eq!(token_client.balance(&arbitrator), 400_000);
+
+    // 2. Withdraw partial bond (250,000)
+    escrow_client.withdraw_arbitrator_bond(&arbitrator, &token_address, &250_000);
+    assert_eq!(escrow_client.get_arbitrator_bond(&arbitrator), 350_000);
+    assert_eq!(token_client.balance(&arbitrator), 650_000);
+
+    // 3. Excess withdrawal rejected
+    let excess_res = escrow_client.try_withdraw_arbitrator_bond(&arbitrator, &token_address, &500_000);
+    assert_eq!(excess_res.err(), Some(Ok(EscrowError::InvalidAmount)));
+
+    // 4. Withdraw remaining bond (350,000)
+    escrow_client.withdraw_arbitrator_bond(&arbitrator, &token_address, &350_000);
+    assert_eq!(escrow_client.get_arbitrator_bond(&arbitrator), 0);
+    assert_eq!(token_client.balance(&arbitrator), 1_000_000);
+}

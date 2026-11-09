@@ -142,6 +142,22 @@ describe("EscrowClient", () => {
       expect(payload.method).toBe("release_milestone");
       expect(payload.args.milestone_id).toBe(1);
     });
+
+    it("should prepare submit_dispute_evidence payload with valid 32-byte hash", () => {
+      const validEvidenceHash = "d".repeat(64);
+      const payload = client.prepareSubmitDisputeEvidence(
+        "job-1",
+        validClientAddress,
+        validEvidenceHash
+      );
+      expect(payload.method).toBe("submit_dispute_evidence");
+      expect(payload.args.caller).toBe(validClientAddress);
+      expect(payload.args.evidence_hash).toBe(validEvidenceHash);
+
+      expect(() =>
+        client.prepareSubmitDisputeEvidence("job-1", validClientAddress, "invalid-hash")
+      ).toThrow("evidenceHashHex must be a 32-byte hexadecimal string");
+    });
   });
 
   describe("Utility functions", () => {

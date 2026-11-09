@@ -213,6 +213,35 @@ export class EscrowClient {
   }
 
   /**
+   * Prepare parameters for submitting cryptographic evidence hash during active dispute.
+   */
+  public prepareSubmitDisputeEvidence(
+    jobId: string,
+    callerAddress: string,
+    evidenceHashHex: string
+  ) {
+    if (!jobId || jobId.trim().length === 0) {
+      throw new ValidationError("jobId is required");
+    }
+    if (!isValidStellarAddress(callerAddress)) {
+      throw new ValidationError(`Invalid caller address: ${callerAddress}`);
+    }
+    if (!/^[0-9a-fA-F]{64}$/.test(evidenceHashHex)) {
+      throw new ValidationError("evidenceHashHex must be a 32-byte hexadecimal string (64 characters)");
+    }
+
+    return {
+      contractId: this.contractId,
+      method: "submit_dispute_evidence",
+      args: {
+        job_id: jobId,
+        caller: callerAddress,
+        evidence_hash: evidenceHashHex,
+      },
+    };
+  }
+
+  /**
    * Prepare parameters for arbitrator dispute resolution.
    */
   public prepareResolveDispute(

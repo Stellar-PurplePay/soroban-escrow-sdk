@@ -143,6 +143,38 @@ describe("EscrowClient", () => {
       expect(payload.args.milestone_id).toBe(1);
     });
 
+    it("should prepare set_milestone_deadline payload", () => {
+      const payload = client.prepareSetMilestoneDeadline(
+        "job-1",
+        validClientAddress,
+        1,
+        1700000000
+      );
+      expect(payload.method).toBe("set_milestone_deadline");
+      expect(payload.args.job_id).toBe("job-1");
+      expect(payload.args.client).toBe(validClientAddress);
+      expect(payload.args.milestone_id).toBe(1);
+      expect(payload.args.deadline).toBe(1700000000n);
+    });
+
+    it("should prepare cancel_expired_milestone payload", () => {
+      const payload = client.prepareCancelExpiredMilestone(
+        "job-1",
+        validClientAddress,
+        2
+      );
+      expect(payload.method).toBe("cancel_expired_milestone");
+      expect(payload.args.job_id).toBe("job-1");
+      expect(payload.args.client).toBe(validClientAddress);
+      expect(payload.args.milestone_id).toBe(2);
+    });
+
+    it("should reject invalid milestoneId in prepareCancelExpiredMilestone", () => {
+      expect(() => {
+        client.prepareCancelExpiredMilestone("job-1", validClientAddress, -1);
+      }).toThrow(ValidationError);
+    });
+
     it("should prepare submit_dispute_evidence payload with valid 32-byte hash", () => {
       const validEvidenceHash = "d".repeat(64);
       const payload = client.prepareSubmitDisputeEvidence(

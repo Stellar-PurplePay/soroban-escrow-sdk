@@ -185,6 +185,65 @@ export class EscrowClient {
   }
 
   /**
+   * Prepare parameters for setting a milestone completion deadline timestamp.
+   */
+  public prepareSetMilestoneDeadline(
+    jobId: string,
+    clientAddress: string,
+    milestoneId: number,
+    deadlineTimestamp: number
+  ) {
+    if (!jobId) throw new ValidationError("jobId is required");
+    if (!isValidStellarAddress(clientAddress)) {
+      throw new ValidationError(`Invalid client address: ${clientAddress}`);
+    }
+    if (!Number.isInteger(milestoneId) || milestoneId <= 0) {
+      throw new ValidationError("milestoneId must be a positive integer");
+    }
+    if (!Number.isInteger(deadlineTimestamp) || deadlineTimestamp <= 0) {
+      throw new ValidationError("deadlineTimestamp must be a positive integer");
+    }
+
+    return {
+      contractId: this.contractId,
+      method: "set_milestone_deadline",
+      args: {
+        job_id: jobId,
+        client: clientAddress,
+        milestone_id: milestoneId,
+        deadline: BigInt(deadlineTimestamp),
+      },
+    };
+  }
+
+  /**
+   * Prepare parameters for cancelling an overdue milestone and claiming a refund.
+   */
+  public prepareCancelExpiredMilestone(
+    jobId: string,
+    clientAddress: string,
+    milestoneId: number
+  ) {
+    if (!jobId) throw new ValidationError("jobId is required");
+    if (!isValidStellarAddress(clientAddress)) {
+      throw new ValidationError(`Invalid client address: ${clientAddress}`);
+    }
+    if (!Number.isInteger(milestoneId) || milestoneId <= 0) {
+      throw new ValidationError("milestoneId must be a positive integer");
+    }
+
+    return {
+      contractId: this.contractId,
+      method: "cancel_expired_milestone",
+      args: {
+        job_id: jobId,
+        client: clientAddress,
+        milestone_id: milestoneId,
+      },
+    };
+  }
+
+  /**
    * Prepare parameters for claiming timeout refund.
    */
   public prepareClaimTimeoutRefund(jobId: string) {

@@ -1991,3 +1991,57 @@ fn test_archive_completed_escrow_lifecycle() {
     let milestones_res = escrow_client.try_get_milestones(&job_id);
     assert_eq!(milestones_res.err(), Some(Ok(EscrowError::EscrowNotFound)));
 }
+
+#[test]
+fn test_dispute_cooling_off_enforcement() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        admin,
+        _treasury,
+        client,
+        freelancer,
+        arbitrator,
+        _token_client,
+        _token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    // Set 300-second dispute cooling-off period
+    escrow_client.set_dispute_cooldown(&admin, &300);
+    assert_eq!(escrow_client.get_dispute_cooldown(), 300);
+
+    let job_id = String::from_str(&env, "cooling-job-1");
+    let mut milestones = Vec::new(&env);
+    milestones.push_back(MilestoneInput {
+        description: String::from_str(&env, "Disputed milestone"),
+        percentage: 100,
+    });
+
+    let params = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address.clone(),
+        total_amount: 1_000_000,
+        timeout_timestamp: env.ledger().timestamp() + 3600,
+        arbitrator: arbitrator.clone(),
+    };
+
+    escrow_client.create_escrow(&job_id, &client, &params, &milestones);
+
+    // Raise dispute
+    escrow_client.raise_dispute(&job_id, &client);
+
+    // Attempt premature resolution within 300s cooling-off period
+    let premature_res = escrow_client.try_resolve_dispute(&job_id, &arbitrator, &500_000, &500_000);
+    assert_eq!(premature_res.err(), Some(Ok(EscrowError::RateLimitExceeded)));
+
+    // Advance ledger timestamp beyond cooldown (301 seconds)
+    env.ledger().with_mut(|li| li.timestamp += 301);
+
+    // Resolution now succeeds
+    escrow_client.resolve_dispute(&job_id, &arbitrator, &500_000, &500_000);
+    let escrow = escrow_client.get_escrow(&job_id);
+    assert_eq!(escrow.status, EscrowStatus::Completed);
+}

@@ -7,7 +7,7 @@ export * from "./freighter";
 export * from "./estimator";
 export * from "./rpcRetry";
 export * from "./rpcCircuitBreaker";
-export * from "./hooks/useEscrowState";
+export * from "./hooks";
 export * from "./utils/stroopPrecision";
 export * from "./utils/explorerUrl";
 export * from "./batchPayment";

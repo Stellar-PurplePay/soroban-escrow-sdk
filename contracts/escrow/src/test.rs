@@ -1268,3 +1268,60 @@ fn test_property_partial_release_sum_conservation() {
     assert_eq!(token_client.balance(&freelancer), initial_freelancer_bal + total_freelancer);
     assert_eq!(token_client.balance(&treasury), initial_treasury_bal + total_fee);
 }
+
+#[test]
+fn test_receipt_counter_and_event_issuance() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        _treasury,
+        client,
+        freelancer,
+        arbitrator,
+        _token_client,
+        _token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let job_id = String::from_str(&env, "job-receipt-counter");
+    let timeout = env.ledger().timestamp() + 50_000;
+
+    let params = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address,
+        total_amount: 1_000_000,
+        timeout_timestamp: timeout,
+        arbitrator,
+    };
+
+    let mut milestones = Vec::new(&env);
+    milestones.push_back(MilestoneInput {
+        description: String::from_str(&env, "Milestone 1"),
+        percentage: 50,
+    });
+    milestones.push_back(MilestoneInput {
+        description: String::from_str(&env, "Milestone 2"),
+        percentage: 50,
+    });
+
+    escrow_client.create_escrow(&job_id, &client, &params, &milestones);
+    escrow_client.start_work(&job_id, &freelancer);
+
+    // Initial counter is 0 (or previous tests in isolated env start at 0)
+    let initial_receipts = escrow_client.get_receipt_counter();
+
+    // Partial release generates receipt #1
+    escrow_client.release_partial_milestone(&job_id, &client, &1, &200_000);
+    assert_eq!(escrow_client.get_receipt_counter(), initial_receipts + 1);
+
+    // Partial release generates receipt #2
+    escrow_client.release_partial_milestone(&job_id, &client, &1, &300_000);
+    assert_eq!(escrow_client.get_receipt_counter(), initial_receipts + 2);
+
+    // Full milestone release generates receipt #3
+    escrow_client.release_milestone(&job_id, &client, &2);
+    assert_eq!(escrow_client.get_receipt_counter(), initial_receipts + 3);
+}

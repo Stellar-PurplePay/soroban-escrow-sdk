@@ -24,6 +24,8 @@
 - **Batch Payout Partitioning**: Automatic splitting of multi-recipient transactions conforming to Stellar's 100 operations/envelope ceiling with Stroop fee estimation.
 - **Milestone Deadlines & Overdue Cancellation**: Enforceable milestone completion timestamps with client fund recovery on unfulfilled deadlines.
 - **Incremental Partial Releases**: Safe pro-rata releases for intermediate deliverables without full milestone finalization.
+- **Monotonic Settlement Audit Receipts**: Sequential on-chain receipt counter ensuring immutable audit logs across releases, dispute resolutions, and timeout refunds.
+- **Multi-Network Explorer Utilities**: Canonical link builder and address/hash truncators supporting Testnet, Futurenet, and Mainnet/Public.
 
 ---
 
@@ -216,6 +218,39 @@ const progress = client.calculateMilestoneProgress("100.0", "40.0");
 console.log(`Completed: ${progress.percentageReleased}%`); // 40.0%
 console.log(`Remaining: ${progress.remainingXlm} XLM`); // 60.0000000 XLM
 console.log(`Is Complete: ${progress.isComplete}`); // false
+```
+
+### 15. Settlement Receipt Tracking & Audit Logs
+
+```typescript
+// Query latest sequential receipt ID issued by the smart contract
+const receiptCounterPayload = client.prepareGetReceiptCounter();
+
+// Parse and validate contract receipt emitted during settlement
+const receipt = client.parseReceiptEvent({
+  receiptId: 42n,
+  jobId: "job-101",
+  milestoneId: 2,
+  recipient: freelancerAddress,
+  amount: 250_000_000n, // 25.0 XLM in Stroops
+  fee: 2_500_000n,       // 0.25 XLM fee
+});
+
+console.log(`Receipt #${receipt.receiptId}: Paid ${receipt.amountXlm} XLM to ${receipt.recipient}`);
+```
+
+### 16. Stellar Explorer Link Generation & Formatting
+
+```typescript
+import { buildStellarExpertUrl, truncateIdentifier } from "@stellar-purplepay/escrow-sdk";
+
+// Generate testnet or public explorer URL
+const txUrl = buildStellarExpertUrl("tx", "e3b0c442...52b855", { network: "testnet" });
+console.log(txUrl); // https://stellar.expert/explorer/testnet/tx/e3b0c442...52b855
+
+// Truncate public key or hash for clean presentation
+const shortAddress = truncateIdentifier("GDQP2KPQGKIHYJGXNUIYOMHARUARCA7DJT5FO2FFOOKY3IF53G4J7734", 6, 6);
+console.log(shortAddress); // "GDQP2K...4J7734"
 ```
 
 ---

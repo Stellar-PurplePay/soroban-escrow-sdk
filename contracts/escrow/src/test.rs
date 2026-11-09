@@ -1651,3 +1651,94 @@ fn test_property_dispute_award_conservation() {
         );
     }
 }
+
+#[test]
+fn test_property_fee_ceiling_and_deduction_bounds() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        treasury,
+        client,
+        freelancer,
+        arbitrator,
+        token_client,
+        token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    // Verify rejection of fees exceeding 10.00% (1,000 bps)
+    let bad_fees: [u32; 4] = [1001, 1500, 5000, 10000];
+    for bad_fee in bad_fees {
+        let res = escrow_client.try_set_fee_bps(&bad_fee);
+        assert_eq!(res, Err(Ok(EscrowError::InvalidFee)));
+    }
+
+    // Matrix of valid (fee_bps, amount) pairs
+    let test_cases: [(u32, i128); 8] = [
+        (0, 10_000),
+        (50, 100_000),
+        (100, 1_000_000),
+        (250, 10_000_000),
+        (500, 50_000_000),
+        (1000, 100_000_000),
+        (100, 17),        // Small odd amount
+        (1000, 999_999),   // Odd amount with max fee
+    ];
+
+    for (idx, (fee_bps, amount)) in test_cases.iter().enumerate() {
+        // Advance ledger to avoid throttle cooldown
+        let now = env.ledger().timestamp();
+        env.ledger().with_mut(|li| {
+            li.timestamp = now + 400;
+        });
+
+        escrow_client.set_fee_bps(fee_bps);
+
+        token_admin.mint(&client, amount);
+
+        let initial_freelancer_bal = token_client.balance(&freelancer);
+        let initial_treasury_bal = token_client.balance(&treasury);
+
+        let job_id = match idx {
+            0 => String::from_str(&env, "fee-case-0"),
+            1 => String::from_str(&env, "fee-case-1"),
+            2 => String::from_str(&env, "fee-case-2"),
+            3 => String::from_str(&env, "fee-case-3"),
+            4 => String::from_str(&env, "fee-case-4"),
+            5 => String::from_str(&env, "fee-case-5"),
+            6 => String::from_str(&env, "fee-case-6"),
+            _ => String::from_str(&env, "fee-case-7"),
+        };
+
+        let params = CreateEscrowParams {
+            freelancer: freelancer.clone(),
+            token: token_address.clone(),
+            total_amount: *amount,
+            timeout_timestamp: env.ledger().timestamp() + 50_000,
+            arbitrator: arbitrator.clone(),
+        };
+        let milestones = Vec::new(&env);
+
+        escrow_client.create_escrow(&job_id, &client, &params, &milestones);
+        escrow_client.start_work(&job_id, &freelancer);
+        escrow_client.release_milestone(&job_id, &client, &1);
+
+        let fee_deducted = token_client.balance(&treasury) - initial_treasury_bal;
+        let net_payout = token_client.balance(&freelancer) - initial_freelancer_bal;
+
+        // Invariant 1: Total conservation
+        assert_eq!(fee_deducted + net_payout, *amount);
+
+        // Invariant 2: Fee deduction is bounded strictly by fee_bps
+        let expected_max_fee = (*amount * (*fee_bps as i128)) / 10_000;
+        assert!(fee_deducted <= expected_max_fee);
+
+        if *fee_bps == 0 {
+            assert_eq!(fee_deducted, 0);
+            assert_eq!(net_payout, *amount);
+        }
+    }
+}

@@ -45,6 +45,9 @@ fn extend_storage_ttl(env: &Env, job_id: &String) {
     }
 }
 
+/// Minimum allowed escrow timeout duration from creation time (prevents clock skew exploits)
+pub const MIN_TIMEOUT_DURATION: u64 = 60;
+
 fn next_receipt_id(env: &Env) -> u64 {
     let current: u64 = env
         .storage()
@@ -265,7 +268,7 @@ impl EscrowContract {
         }
 
         let now = env.ledger().timestamp();
-        if params.timeout_timestamp <= now {
+        if params.timeout_timestamp < (now + MIN_TIMEOUT_DURATION) {
             return Err(EscrowError::TimeoutAlreadyExpired);
         }
 

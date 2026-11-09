@@ -835,7 +835,7 @@ fn test_arbitrator_bond_slashing_mechanism() {
     env.mock_all_auths();
 
     let (
-        _admin,
+        admin,
         _treasury,
         client,
         freelancer,
@@ -1534,4 +1534,49 @@ fn test_admin_action_throttling_guard() {
 
     // Throttled cooldown elapsed; second update now succeeds
     escrow_client.set_treasury(&new_treasury2);
+}
+
+#[test]
+fn test_timeout_minimum_grace_period_enforcement() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        _treasury,
+        client,
+        freelancer,
+        arbitrator,
+        _token_client,
+        _token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let job_id = String::from_str(&env, "job-grace-period");
+    let now = env.ledger().timestamp();
+
+    // Timeout only 30s in future (< MIN_TIMEOUT_DURATION 60s)
+    let params_invalid = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address.clone(),
+        total_amount: 100_000,
+        timeout_timestamp: now + 30,
+        arbitrator: arbitrator.clone(),
+    };
+    let milestones = Vec::new(&env);
+
+    let res = escrow_client.try_create_escrow(&job_id, &client, &params_invalid, &milestones);
+    assert_eq!(res, Err(Ok(EscrowError::TimeoutAlreadyExpired)));
+
+    // Valid timeout >= 60s
+    let params_valid = CreateEscrowParams {
+        freelancer,
+        token: token_address,
+        total_amount: 100_000,
+        timeout_timestamp: now + 60,
+        arbitrator,
+    };
+    let res_valid = escrow_client.try_create_escrow(&job_id, &client, &params_valid, &milestones);
+    assert!(res_valid.is_ok());
 }

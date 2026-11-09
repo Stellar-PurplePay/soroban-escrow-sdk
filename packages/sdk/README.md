@@ -25,6 +25,7 @@
 - **Milestone Deadlines & Overdue Cancellation**: Enforceable milestone completion timestamps with client fund recovery on unfulfilled deadlines.
 - **Incremental Partial Releases**: Safe pro-rata releases for intermediate deliverables without full milestone finalization.
 - **RPC Circuit Breaker & Fail-Fast Protection**: Three-state finite state machine (`CLOSED`, `OPEN`, `HALF_OPEN`) preventing cascading node saturation during network outages.
+- **Formal Property-Based Invariant Verification**: Mathematical proofs covering balance conservation, Stroop bijection, 100% milestone distributions, and monotonic audit receipt counters.
 - **Monotonic Settlement Audit Receipts**: Sequential on-chain receipt counter ensuring immutable audit logs across releases, dispute resolutions, and timeout refunds.
 - **Multi-Network Explorer Utilities**: Canonical link builder and address/hash truncators supporting Testnet, Futurenet, and Mainnet/Public.
 
@@ -273,6 +274,19 @@ const cb = new RpcCircuitBreaker({
 const report = cb.getDetailedReport();
 console.log(`Current state: ${report.state}, Total Failures: ${report.totalFailures}, Short-circuited: ${report.totalShortCircuited}`);
 ```
+
+### 18. Property-Based Testing & Mathematical Invariant Verification
+
+The SDK and smart contracts are verified under property-based fuzzing and rigorous invariant testing:
+
+| Invariant Theorem | Verification Scope | Status |
+|---|---|:---:|
+| **Milestone Sum Conservation** | $\sum_{i=1}^{n} M_i \equiv \text{Total}$ across all split permutations | Verified |
+| **Partial Release Conservation** | $\text{Released} + \text{Remaining} \equiv \text{MilestoneAmount}$ | Verified |
+| **Dispute Fund Balance** | $\text{ClientAward} + \text{FreelancerPayout} + \text{Fee} \equiv \text{Remaining}$ | Verified |
+| **Arbitrator Bond Conservation** | $\sum \text{ArbitratorBonds} \equiv \text{ContractTokenBalance}$ | Verified |
+| **Stroop Precision Bijection** | $\text{fromStroops}(\text{toStroops}(x)) \equiv x$ (No IEEE-754 drift) | Verified |
+| **Monotonic Receipt Sequence** | $R_{t+1} > R_t$ strictly monotonic without gaps across all settlements | Verified |
 
 ---
 

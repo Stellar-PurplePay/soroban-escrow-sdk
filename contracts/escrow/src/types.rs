@@ -53,6 +53,15 @@ pub struct MilestoneInput {
 }
 
 #[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EscrowProgress {
+    pub total_amount: i128,
+    pub released_amount: i128,
+    pub percentage_released: u32,
+    pub status: EscrowStatus,
+}
+
+#[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
     Admin,

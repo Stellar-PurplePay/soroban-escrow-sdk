@@ -644,4 +644,37 @@ impl EscrowContract {
             .get(&DataKey::Deliverable(job_id))
             .ok_or(EscrowError::EscrowNotFound)
     }
+
+    /// Get escrow status badge only.
+    pub fn get_escrow_status(env: Env, job_id: String) -> Result<EscrowStatus, EscrowError> {
+        let escrow = Self::get_escrow(env, job_id)?;
+        Ok(escrow.status)
+    }
+
+    /// Get lightweight escrow financial progress summary.
+    pub fn get_escrow_progress(env: Env, job_id: String) -> Result<EscrowProgress, EscrowError> {
+        let escrow = Self::get_escrow(env, job_id)?;
+        let pct = if escrow.total_amount > 0 {
+            ((escrow.released_amount * 100) / escrow.total_amount) as u32
+        } else {
+            0
+        };
+        Ok(EscrowProgress {
+            total_amount: escrow.total_amount,
+            released_amount: escrow.released_amount,
+            percentage_released: pct,
+            status: escrow.status,
+        })
+    }
+
+    /// Get a single milestone by ID.
+    pub fn get_milestone(env: Env, job_id: String, milestone_id: u32) -> Result<Milestone, EscrowError> {
+        let milestones = Self::get_milestones(env, job_id)?;
+        for m in milestones.iter() {
+            if m.id == milestone_id {
+                return Ok(m);
+            }
+        }
+        Err(EscrowError::MilestoneNotFound)
+    }
 }

@@ -490,3 +490,62 @@ fn test_mutual_cancellation_while_in_progress() {
     // Client received remaining funds back
     assert_eq!(token_client.balance(&client), 10_000_000);
 }
+
+#[test]
+fn test_lightweight_query_methods() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        _treasury,
+        client,
+        freelancer,
+        arbitrator,
+        _token_client,
+        _token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let job_id = String::from_str(&env, "job-queries");
+    let timeout = env.ledger().timestamp() + 3600;
+
+    let params = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address.clone(),
+        total_amount: 1_000_000,
+        timeout_timestamp: timeout,
+        arbitrator: arbitrator.clone(),
+    };
+
+    let mut milestones = Vec::new(&env);
+    milestones.push_back(MilestoneInput {
+        description: String::from_str(&env, "M1"),
+        percentage: 40,
+    });
+    milestones.push_back(MilestoneInput {
+        description: String::from_str(&env, "M2"),
+        percentage: 60,
+    });
+
+    escrow_client.create_escrow(&job_id, &client, &params, &milestones);
+
+    // 1. Check status
+    assert_eq!(escrow_client.get_escrow_status(&job_id), EscrowStatus::Created);
+
+    // 2. Check single milestone lookup
+    let m1 = escrow_client.get_milestone(&job_id, &1);
+    assert_eq!(m1.percentage, 40);
+    assert_eq!(m1.amount, 400_000);
+
+    // 3. Release M1 and verify progress
+    escrow_client.start_work(&job_id, &freelancer);
+    escrow_client.release_milestone(&job_id, &client, &1);
+
+    let progress = escrow_client.get_escrow_progress(&job_id);
+    assert_eq!(progress.released_amount, 400_000);
+    assert_eq!(progress.total_amount, 1_000_000);
+    assert_eq!(progress.percentage_released, 40);
+    assert_eq!(progress.status, EscrowStatus::InProgress);
+}

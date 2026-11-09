@@ -16,7 +16,9 @@
 - **Multi-Arbitrator Quorum Voting**: Methods for submitting decentralized 2-of-3 arbitrator panel votes (`ClientFavor`, `FreelancerFavor`, `SplitHalf`).
 - **Reactive State Subscription**: Real-time contract state tracking with poll interval management, status callbacks, and error reporting.
 - **Emergency Circuit Breaker**: Transaction preparation for contract pause, unpause, and mutual cancellation with dual-party authorization.
-- **Cryptographic Deliverable Proofs**: Client-side SHA-256 deliverable payload hashing with timestamped salt verification.
+- **Cryptographic Deliverable Proofs**: Client-side SHA-256 deliverable payload hashing with timestamped salt verification and granular per-milestone submissions.
+- **Stroop Precision Math**: Exact BigInt Stroop arithmetic preventing IEEE-754 floating-point inaccuracies.
+- **Contract & RPC Health Diagnostics**: Automated node pinging, ledger sequence tracking, and paused status reporting.
 
 ---
 
@@ -89,6 +91,34 @@ const stateManager = client.subscribeEscrowState("job-101", {
 
 // Unsubscribe when component unmounts
 stateManager.stop();
+```
+
+### 6. Submitting Milestone Deliverable Proofs
+
+```typescript
+// Freelancer submits cryptographic proof for Milestone #2
+const deliverablePayload = client.prepareSubmitMilestoneDeliverable(
+  "job-101",
+  freelancerAddress,
+  2,
+  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+);
+```
+
+### 7. High-Precision Stroop Conversions
+
+```typescript
+import { toStroops, fromStroops } from "@stellar-purplepay/escrow-sdk";
+
+const stroops = toStroops("15.5000000"); // 155,000,000n
+const xlmString = fromStroops(155_000_000n); // "15.5000000"
+```
+
+### 8. Probing Node & Contract Health
+
+```typescript
+const health = await client.getContractHealth();
+console.log(`Responsive: ${health.isResponsive}, Latency: ${health.rpcLatencyMs}ms, Ledger: #${health.latestLedgerSequence}`);
 ```
 
 ---

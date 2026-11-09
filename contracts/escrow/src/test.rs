@@ -1817,3 +1817,86 @@ fn test_property_arbitrator_bond_conservation() {
     assert_eq!(sum_bonds, expected_total_bonds);
     assert_eq!(token_client.balance(&contract_addr), sum_bonds);
 }
+
+#[test]
+fn test_property_receipt_monotonic_concurrency() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        _treasury,
+        client,
+        freelancer,
+        arbitrator,
+        _token_client,
+        token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let mut expected_receipt_count = escrow_client.get_receipt_counter();
+
+    // Create 3 separate jobs
+    for i in 1..=3 {
+        token_admin.mint(&client, &1_000_000);
+        let job_id = match i {
+            1 => String::from_str(&env, "job-interleaved-1"),
+            2 => String::from_str(&env, "job-interleaved-2"),
+            _ => String::from_str(&env, "job-interleaved-3"),
+        };
+        let mut ms = Vec::new(&env);
+        ms.push_back(MilestoneInput {
+            description: String::from_str(&env, "M1"),
+            percentage: 50,
+        });
+        ms.push_back(MilestoneInput {
+            description: String::from_str(&env, "M2"),
+            percentage: 50,
+        });
+        let params = CreateEscrowParams {
+            freelancer: freelancer.clone(),
+            token: token_address.clone(),
+            total_amount: 1_000_000,
+            timeout_timestamp: env.ledger().timestamp() + 50_000,
+            arbitrator: arbitrator.clone(),
+        };
+        escrow_client.create_escrow(&job_id, &client, &params, &ms);
+        escrow_client.start_work(&job_id, &freelancer);
+    }
+
+    // Interleaved action sequence:
+    // Action 1: Job 1 partial release 100k -> +1 receipt
+    let j1 = String::from_str(&env, "job-interleaved-1");
+    escrow_client.release_partial_milestone(&j1, &client, &1, &100_000);
+    expected_receipt_count += 1;
+    assert_eq!(escrow_client.get_receipt_counter(), expected_receipt_count);
+
+    // Action 2: Job 2 full milestone 1 release -> +1 receipt
+    let j2 = String::from_str(&env, "job-interleaved-2");
+    escrow_client.release_milestone(&j2, &client, &1);
+    expected_receipt_count += 1;
+    assert_eq!(escrow_client.get_receipt_counter(), expected_receipt_count);
+
+    // Action 3: Job 3 partial release 250k -> +1 receipt
+    let j3 = String::from_str(&env, "job-interleaved-3");
+    escrow_client.release_partial_milestone(&j3, &client, &1, &250_000);
+    expected_receipt_count += 1;
+    assert_eq!(escrow_client.get_receipt_counter(), expected_receipt_count);
+
+    // Action 4: Job 1 partial release another 200k -> +1 receipt
+    escrow_client.release_partial_milestone(&j1, &client, &1, &200_000);
+    expected_receipt_count += 1;
+    assert_eq!(escrow_client.get_receipt_counter(), expected_receipt_count);
+
+    // Action 5: Job 3 raised dispute and resolved -> +2 receipts (client + freelancer awards)
+    escrow_client.raise_dispute(&j3, &client);
+    escrow_client.resolve_dispute(&j3, &arbitrator, &300_000, &450_000);
+    expected_receipt_count += 2;
+    assert_eq!(escrow_client.get_receipt_counter(), expected_receipt_count);
+
+    // Action 6: Job 2 full milestone 2 release -> +1 receipt
+    escrow_client.release_milestone(&j2, &client, &2);
+    expected_receipt_count += 1;
+    assert_eq!(escrow_client.get_receipt_counter(), expected_receipt_count);
+}

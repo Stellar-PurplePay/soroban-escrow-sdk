@@ -579,3 +579,96 @@ fn test_treasury_rotation_and_admin_transfer() {
     // 3. New admin can configure fee
     escrow_client.set_fee_bps(&250);
 }
+
+#[test]
+fn test_property_milestone_sum_conservation() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        treasury,
+        client,
+        freelancer,
+        arbitrator,
+        token_client,
+        token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    // Test a matrix of various milestone percentage combinations summing to 100%
+    let test_splits: [&[u32]; 7] = [
+        &[100],
+        &[50, 50],
+        &[33, 33, 34],
+        &[25, 25, 25, 25],
+        &[10, 20, 30, 25, 15],
+        &[14, 14, 14, 14, 14, 14, 16],
+        &[10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+    ];
+
+    let total_deposit: i128 = 10_000_000; // 10 million units
+
+    for (test_idx, split) in test_splits.iter().enumerate() {
+        // Mint additional tokens to client for each test case
+        token_admin.mint(&client, &total_deposit);
+
+        let initial_freelancer_balance = token_client.balance(&freelancer);
+        let initial_treasury_balance = token_client.balance(&treasury);
+
+        let job_id = match test_idx {
+            0 => String::from_str(&env, "job-prop-split-0"),
+            1 => String::from_str(&env, "job-prop-split-1"),
+            2 => String::from_str(&env, "job-prop-split-2"),
+            3 => String::from_str(&env, "job-prop-split-3"),
+            4 => String::from_str(&env, "job-prop-split-4"),
+            5 => String::from_str(&env, "job-prop-split-5"),
+            _ => String::from_str(&env, "job-prop-split-6"),
+        };
+        let timeout = env.ledger().timestamp() + 50_000;
+
+        let params = CreateEscrowParams {
+            freelancer: freelancer.clone(),
+            token: token_address.clone(),
+            total_amount: total_deposit,
+            timeout_timestamp: timeout,
+            arbitrator: arbitrator.clone(),
+        };
+
+        let mut milestones = Vec::new(&env);
+        for (_m_idx, &pct) in split.iter().enumerate() {
+            milestones.push_back(MilestoneInput {
+                description: String::from_str(&env, "Phase"),
+                percentage: pct,
+            });
+        }
+
+        escrow_client.create_escrow(&job_id, &client, &params, &milestones);
+        escrow_client.start_work(&job_id, &freelancer);
+
+        // Release all milestones
+        for m_id in 1..=(split.len() as u32) {
+            escrow_client.release_milestone(&job_id, &client, &m_id);
+        }
+
+        // Verify Conservation of Funds Invariant:
+        // net freelancer payout + net treasury fees == total_deposit
+        let final_freelancer_balance = token_client.balance(&freelancer);
+        let final_treasury_balance = token_client.balance(&treasury);
+
+        let total_paid_to_freelancer = final_freelancer_balance - initial_freelancer_balance;
+        let total_paid_to_treasury = final_treasury_balance - initial_treasury_balance;
+        let total_disbursed = total_paid_to_freelancer + total_paid_to_treasury;
+
+        assert_eq!(
+            total_disbursed, total_deposit,
+            "Invariant violation at split test index {}: disbursed ({}) != deposit ({})",
+            test_idx, total_disbursed, total_deposit
+        );
+
+        let escrow = escrow_client.get_escrow(&job_id);
+        assert_eq!(escrow.status, EscrowStatus::Completed);
+        assert_eq!(escrow.released_amount, total_deposit);
+    }
+}

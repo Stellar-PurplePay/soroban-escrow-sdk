@@ -114,4 +114,19 @@ impl EscrowEvents {
             (job_id, milestone_id, released_amount, freelancer_payout, fee_amount),
         );
     }
+
+    pub fn receipt_issued(
+        env: &Env,
+        receipt_id: u64,
+        job_id: String,
+        milestone_id: u32,
+        recipient: Address,
+        amount: i128,
+        fee: i128,
+    ) {
+        env.events().publish(
+            (symbol_short!("escrow"), symbol_short!("receipt")),
+            (receipt_id, job_id, milestone_id, recipient, amount, fee),
+        );
+    }
 }

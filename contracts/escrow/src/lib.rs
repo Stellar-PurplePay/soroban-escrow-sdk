@@ -45,6 +45,17 @@ fn extend_storage_ttl(env: &Env, job_id: &String) {
     }
 }
 
+fn next_receipt_id(env: &Env) -> u64 {
+    let current: u64 = env
+        .storage()
+        .instance()
+        .get(&DataKey::ReceiptCounter)
+        .unwrap_or(0);
+    let next = current + 1;
+    env.storage().instance().set(&DataKey::ReceiptCounter, &next);
+    next
+}
+
 #[contract]
 pub struct EscrowContract;
 
@@ -532,7 +543,18 @@ impl EscrowContract {
             &freelancer_payout,
         );
 
-        EscrowEvents::milestone_released(&env, job_id, milestone_id, release_amount);
+        EscrowEvents::milestone_released(&env, job_id.clone(), milestone_id, release_amount);
+
+        let receipt_id = next_receipt_id(&env);
+        EscrowEvents::receipt_issued(
+            &env,
+            receipt_id,
+            job_id,
+            milestone_id,
+            escrow.freelancer,
+            release_amount,
+            fee,
+        );
 
         Ok(())
     }
@@ -1254,14 +1276,33 @@ impl EscrowContract {
 
         EscrowEvents::milestone_partial_released(
             &env,
-            job_id,
+            job_id.clone(),
             milestone_id,
             amount,
             freelancer_payout,
             fee_amount,
         );
 
+        let receipt_id = next_receipt_id(&env);
+        EscrowEvents::receipt_issued(
+            &env,
+            receipt_id,
+            job_id,
+            milestone_id,
+            escrow.freelancer,
+            amount,
+            fee_amount,
+        );
+
         Ok(milestone.amount - new_released)
+    }
+
+    /// Query the cumulative receipt counter across all releases.
+    pub fn get_receipt_counter(env: Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::ReceiptCounter)
+            .unwrap_or(0)
     }
 
     /// Query the cumulative amount released for a milestone.

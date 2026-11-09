@@ -85,4 +85,5 @@ pub enum DataKey {
     DisputeEvidence(String, Address),
     MilestoneDeadline(String, u32),
     MilestoneReleased(String, u32),
+    ReceiptCounter,
 }

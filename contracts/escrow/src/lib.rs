@@ -1,15 +1,17 @@
 #![no_std]
 #![allow(deprecated)]
 
-use soroban_sdk::{contract, contractimpl, symbol_short, token, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, String, Vec};
 
 mod errors;
+mod events;
 mod types;
 
 #[cfg(test)]
 mod test;
 
 pub use errors::EscrowError;
+pub use events::EscrowEvents;
 pub use types::*;
 
 /// Maximum allowed platform fee: 10.00% (1,000 bps)
@@ -79,7 +81,7 @@ impl EscrowContract {
             .ok_or(EscrowError::NotInitialized)?;
         admin.require_auth();
         env.storage().instance().set(&DataKey::Paused, &true);
-        env.events().publish((symbol_short!("pause"),), admin);
+        EscrowEvents::pause(&env, admin);
         Ok(())
     }
 
@@ -92,7 +94,7 @@ impl EscrowContract {
             .ok_or(EscrowError::NotInitialized)?;
         admin.require_auth();
         env.storage().instance().set(&DataKey::Paused, &false);
-        env.events().publish((symbol_short!("unpause"),), admin);
+        EscrowEvents::unpause(&env, admin);
         Ok(())
     }
 
@@ -125,10 +127,7 @@ impl EscrowContract {
         admin.require_auth();
 
         env.storage().instance().set(&DataKey::Treasury, &new_treasury);
-        env.events().publish(
-            (symbol_short!("admin"), symbol_short!("treasury")),
-            new_treasury,
-        );
+        EscrowEvents::set_treasury(&env, new_treasury);
         Ok(())
     }
 
@@ -142,10 +141,7 @@ impl EscrowContract {
         admin.require_auth();
 
         env.storage().instance().set(&DataKey::Admin, &new_admin);
-        env.events().publish(
-            (symbol_short!("admin"), symbol_short!("transfer")),
-            new_admin,
-        );
+        EscrowEvents::transfer_admin(&env, new_admin);
         Ok(())
     }
 
@@ -251,10 +247,7 @@ impl EscrowContract {
 
         extend_storage_ttl(&env, &job_id);
 
-        env.events().publish(
-            (symbol_short!("escrow"), symbol_short!("created")),
-            (job_id, escrow.total_amount),
-        );
+        EscrowEvents::escrow_created(&env, job_id, escrow.total_amount);
 
         Ok(())
     }
@@ -283,8 +276,7 @@ impl EscrowContract {
         env.storage().persistent().set(&escrow_key, &escrow);
         extend_storage_ttl(&env, &job_id);
 
-        env.events()
-            .publish((symbol_short!("escrow"), symbol_short!("started")), job_id);
+        EscrowEvents::escrow_started(&env, job_id);
 
         Ok(())
     }
@@ -319,10 +311,7 @@ impl EscrowContract {
             .set(&DataKey::Deliverable(job_id.clone()), &deliverable_hash);
         extend_storage_ttl(&env, &job_id);
 
-        env.events().publish(
-            (symbol_short!("escrow"), symbol_short!("deliv")),
-            (job_id, deliverable_hash),
-        );
+        EscrowEvents::deliverable_submitted(&env, job_id, deliverable_hash);
 
         Ok(())
     }
@@ -418,10 +407,7 @@ impl EscrowContract {
             &freelancer_payout,
         );
 
-        env.events().publish(
-            (symbol_short!("escrow"), symbol_short!("released")),
-            (job_id, milestone_id, release_amount),
-        );
+        EscrowEvents::milestone_released(&env, job_id, milestone_id, release_amount);
 
         Ok(())
     }
@@ -454,10 +440,7 @@ impl EscrowContract {
             token_client.transfer(&env.current_contract_address(), &escrow.client, &remaining);
         }
 
-        env.events().publish(
-            (symbol_short!("escrow"), symbol_short!("refunded")),
-            (job_id, remaining),
-        );
+        EscrowEvents::escrow_refunded(&env, job_id, remaining);
 
         Ok(())
     }
@@ -494,10 +477,7 @@ impl EscrowContract {
             token_client.transfer(&env.current_contract_address(), &escrow.client, &remaining);
         }
 
-        env.events().publish(
-            (symbol_short!("escrow"), symbol_short!("mut_canc")),
-            (job_id, remaining),
-        );
+        EscrowEvents::mutual_cancelled(&env, job_id, remaining);
 
         Ok(())
     }
@@ -539,10 +519,7 @@ impl EscrowContract {
         }
         extend_storage_ttl(&env, &job_id);
 
-        env.events().publish(
-            (symbol_short!("escrow"), symbol_short!("timeout")),
-            (job_id, remaining),
-        );
+        EscrowEvents::timeout_refunded(&env, job_id, remaining);
 
         Ok(())
     }
@@ -571,10 +548,7 @@ impl EscrowContract {
         env.storage().persistent().set(&escrow_key, &escrow);
         extend_storage_ttl(&env, &job_id);
 
-        env.events().publish(
-            (symbol_short!("escrow"), symbol_short!("disputed")),
-            (job_id, caller),
-        );
+        EscrowEvents::dispute_raised(&env, job_id, caller);
 
         Ok(())
     }
@@ -648,10 +622,7 @@ impl EscrowContract {
             );
         }
 
-        env.events().publish(
-            (symbol_short!("escrow"), symbol_short!("resolved")),
-            (job_id, client_award, freelancer_award),
-        );
+        EscrowEvents::dispute_resolved(&env, job_id, client_award, freelancer_award);
 
         Ok(())
     }

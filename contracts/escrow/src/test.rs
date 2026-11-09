@@ -1742,3 +1742,78 @@ fn test_property_fee_ceiling_and_deduction_bounds() {
         }
     }
 }
+
+#[test]
+fn test_property_arbitrator_bond_conservation() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        admin,
+        _treasury,
+        _client,
+        _freelancer,
+        _arbitrator,
+        token_client,
+        token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let arb_a = Address::generate(&env);
+    let arb_b = Address::generate(&env);
+    let arb_c = Address::generate(&env);
+    let penalty_recipient = Address::generate(&env);
+
+    token_admin.mint(&arb_a, &2_000_000);
+    token_admin.mint(&arb_b, &2_000_000);
+    token_admin.mint(&arb_c, &2_000_000);
+
+    let contract_addr = &escrow_client.address;
+
+    // 1. Initial registrations
+    escrow_client.register_arbitrator(&arb_a, &token_address, &500_000);
+    assert_eq!(escrow_client.get_arbitrator_bond(&arb_a), 500_000);
+
+    escrow_client.register_arbitrator(&arb_b, &token_address, &1_000_000);
+    assert_eq!(escrow_client.get_arbitrator_bond(&arb_b), 1_000_000);
+
+    escrow_client.register_arbitrator(&arb_c, &token_address, &750_000);
+    assert_eq!(escrow_client.get_arbitrator_bond(&arb_c), 750_000);
+
+    let mut expected_total_bonds: i128 = 500_000 + 1_000_000 + 750_000;
+    assert_eq!(token_client.balance(&contract_addr), expected_total_bonds);
+
+    // 2. Bond top-up
+    escrow_client.register_arbitrator(&arb_a, &token_address, &350_000);
+    assert_eq!(escrow_client.get_arbitrator_bond(&arb_a), 850_000);
+    expected_total_bonds += 350_000;
+    assert_eq!(token_client.balance(&contract_addr), expected_total_bonds);
+
+    // 3. Penalty slash Arb A
+    let initial_recipient_bal = token_client.balance(&penalty_recipient);
+    escrow_client.slash_arbitrator_bond(&admin, &arb_a, &penalty_recipient, &token_address, &250_000);
+    assert_eq!(escrow_client.get_arbitrator_bond(&arb_a), 600_000);
+    expected_total_bonds -= 250_000;
+    assert_eq!(token_client.balance(&contract_addr), expected_total_bonds);
+    assert_eq!(token_client.balance(&penalty_recipient) - initial_recipient_bal, 250_000);
+
+    // 4. Penalty slash Arb B
+    escrow_client.slash_arbitrator_bond(&admin, &arb_b, &penalty_recipient, &token_address, &600_000);
+    assert_eq!(escrow_client.get_arbitrator_bond(&arb_b), 400_000);
+    expected_total_bonds -= 600_000;
+    assert_eq!(token_client.balance(&contract_addr), expected_total_bonds);
+    assert_eq!(token_client.balance(&penalty_recipient) - initial_recipient_bal, 850_000);
+
+    // 5. Excessive slash rejected
+    let excess_res = escrow_client.try_slash_arbitrator_bond(&admin, &arb_c, &penalty_recipient, &token_address, &999_999);
+    assert_eq!(excess_res, Err(Ok(EscrowError::InsufficientBond)));
+    assert_eq!(escrow_client.get_arbitrator_bond(&arb_c), 750_000);
+
+    // Invariant: sum of all individual bonds strictly matches contract balance
+    let sum_bonds = escrow_client.get_arbitrator_bond(&arb_a)
+        + escrow_client.get_arbitrator_bond(&arb_b)
+        + escrow_client.get_arbitrator_bond(&arb_c);
+    assert_eq!(sum_bonds, expected_total_bonds);
+    assert_eq!(token_client.balance(&contract_addr), sum_bonds);
+}

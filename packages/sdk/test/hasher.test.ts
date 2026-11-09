@@ -32,3 +32,4 @@ describe("hasher", () => {
     expect(() => verifyDeliverableHash("content", "short-hash")).toThrow(ValidationError);
   });
 });
+

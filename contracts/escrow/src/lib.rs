@@ -1602,4 +1602,55 @@ impl EscrowContract {
             .get(&DataKey::DisputeCooldown)
             .unwrap_or(0)
     }
+
+    /// Record an on-chain cryptographic audit entry with strictly monotonic counter
+    pub fn record_audit_entry(
+        env: Env,
+        caller: Address,
+        action: Symbol,
+        record_hash: BytesN<32>,
+    ) -> Result<u64, EscrowError> {
+        ensure_not_paused(&env)?;
+        caller.require_auth();
+
+        let current_count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::AuditLogCounter)
+            .unwrap_or(0);
+        let next_count = current_count + 1;
+        env.storage()
+            .instance()
+            .set(&DataKey::AuditLogCounter, &next_count);
+        env.storage()
+            .persistent()
+            .set(&DataKey::AuditLogReceipt(next_count), &record_hash);
+
+        EscrowEvents::audit_log_recorded(&env, next_count, action, record_hash);
+        Ok(next_count)
+    }
+
+    /// Query the total number of recorded on-chain audit logs.
+    pub fn get_audit_log_count(env: Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::AuditLogCounter)
+            .unwrap_or(0)
+    }
+
+    /// Verify an audit receipt hash against the immutable on-chain record.
+    pub fn verify_audit_receipt(
+        env: Env,
+        index: u64,
+        expected_hash: BytesN<32>,
+    ) -> Result<bool, EscrowError> {
+        let stored_hash: Option<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AuditLogReceipt(index));
+        match stored_hash {
+            Some(h) => Ok(h == expected_hash),
+            None => Err(EscrowError::AuditIndexMismatch),
+        }
+    }
 }

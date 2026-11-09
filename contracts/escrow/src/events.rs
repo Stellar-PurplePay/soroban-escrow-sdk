@@ -100,4 +100,18 @@ impl EscrowEvents {
         env.events()
             .publish((symbol_short!("escrow"), symbol_short!("ms_ext")), (job_id, milestone_id, new_deadline));
     }
+
+    pub fn milestone_partial_released(
+        env: &Env,
+        job_id: String,
+        milestone_id: u32,
+        released_amount: i128,
+        freelancer_payout: i128,
+        fee_amount: i128,
+    ) {
+        env.events().publish(
+            (symbol_short!("escrow"), symbol_short!("ms_part")),
+            (job_id, milestone_id, released_amount, freelancer_payout, fee_amount),
+        );
+    }
 }

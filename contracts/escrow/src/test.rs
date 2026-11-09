@@ -1132,3 +1132,74 @@ fn test_extend_milestone_deadline() {
     let unauthorized = escrow_client.try_extend_milestone_deadline(&job_id, &non_client, &1, &1000);
     assert_eq!(unauthorized, Err(Ok(EscrowError::Unauthorized)));
 }
+
+#[test]
+fn test_release_partial_milestone_lifecycle() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        treasury,
+        client,
+        freelancer,
+        arbitrator,
+        token_client,
+        _token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let job_id = String::from_str(&env, "job-partial-release");
+    let base_time = env.ledger().timestamp();
+    let timeout = base_time + 50_000;
+
+    let params = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address,
+        total_amount: 1_000_000,
+        timeout_timestamp: timeout,
+        arbitrator: arbitrator.clone(),
+    };
+
+    let mut milestones = Vec::new(&env);
+    milestones.push_back(MilestoneInput {
+        description: String::from_str(&env, "Project Phase 1"),
+        percentage: 100,
+    });
+
+    escrow_client.create_escrow(&job_id, &client, &params, &milestones);
+    escrow_client.start_work(&job_id, &freelancer);
+
+    let initial_freelancer_bal = token_client.balance(&freelancer);
+    let initial_treasury_bal = token_client.balance(&treasury);
+
+    // Initial state: 0 released, 1,000,000 remaining
+    assert_eq!(escrow_client.get_milestone_released_amount(&job_id, &1), 0);
+    assert_eq!(escrow_client.get_milestone_remaining_amount(&job_id, &1), 1_000_000);
+
+    // First partial release: 400,000 (fee is 100 bps = 1.0% = 4,000; net 396,000)
+    let remaining_after_first = escrow_client.release_partial_milestone(&job_id, &client, &1, &400_000);
+    assert_eq!(remaining_after_first, 600_000);
+    assert_eq!(escrow_client.get_milestone_released_amount(&job_id, &1), 400_000);
+    assert_eq!(escrow_client.get_milestone_remaining_amount(&job_id, &1), 600_000);
+
+    assert_eq!(token_client.balance(&freelancer), initial_freelancer_bal + 396_000);
+    assert_eq!(token_client.balance(&treasury), initial_treasury_bal + 4_000);
+
+    // Attempting to release more than remaining (700,000 > 600,000) fails with InvalidAmount
+    let over_release = escrow_client.try_release_partial_milestone(&job_id, &client, &1, &700_000);
+    assert_eq!(over_release, Err(Ok(EscrowError::InvalidAmount)));
+
+    // Second partial release: remaining 600,000 (fee is 1.0% = 6,000; net 594,000)
+    let remaining_after_second = escrow_client.release_partial_milestone(&job_id, &client, &1, &600_000);
+    assert_eq!(remaining_after_second, 0);
+    assert_eq!(escrow_client.get_milestone_released_amount(&job_id, &1), 1_000_000);
+    assert_eq!(escrow_client.get_milestone_remaining_amount(&job_id, &1), 0);
+
+    assert_eq!(token_client.balance(&freelancer), initial_freelancer_bal + 396_000 + 594_000);
+    assert_eq!(token_client.balance(&treasury), initial_treasury_bal + 4_000 + 6_000);
+
+    let final_escrow = escrow_client.get_escrow(&job_id);
+    assert_eq!(final_escrow.status, EscrowStatus::Completed);
+}

@@ -1153,4 +1153,140 @@ impl EscrowContract {
         EscrowEvents::milestone_deadline_extended(&env, job_id, milestone_id, new_deadline);
         Ok(new_deadline)
     }
+
+    /// Releases a partial amount of a milestone to the freelancer with platform fee deducted pro-rata.
+    /// If the partial release pays out the entire milestone amount, the milestone is marked approved.
+    pub fn release_partial_milestone(
+        env: Env,
+        job_id: String,
+        client: Address,
+        milestone_id: u32,
+        amount: i128,
+    ) -> Result<i128, EscrowError> {
+        ensure_not_paused(&env)?;
+        client.require_auth();
+
+        let mut escrow = Self::get_escrow(env.clone(), job_id.clone())?;
+        if escrow.client != client {
+            return Err(EscrowError::Unauthorized);
+        }
+
+        if escrow.status != EscrowStatus::InProgress && escrow.status != EscrowStatus::Created {
+            return Err(EscrowError::InvalidStatus);
+        }
+
+        let milestone = Self::get_milestone(env.clone(), job_id.clone(), milestone_id)?;
+        if milestone.approved {
+            return Err(EscrowError::MilestoneAlreadyApproved);
+        }
+
+        let released_key = DataKey::MilestoneReleased(job_id.clone(), milestone_id);
+        let previously_released: i128 = env
+            .storage()
+            .persistent()
+            .get(&released_key)
+            .unwrap_or(0);
+
+        let remaining = milestone.amount - previously_released;
+        if amount <= 0 || amount > remaining {
+            return Err(EscrowError::InvalidAmount);
+        }
+
+        let fee_bps: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::FeeBps)
+            .unwrap_or(0);
+        let treasury: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Treasury)
+            .ok_or(EscrowError::NotInitialized)?;
+
+        let fee_amount = if fee_bps > 0 {
+            (amount * (fee_bps as i128)) / 10_000
+        } else {
+            0
+        };
+        let freelancer_payout = amount - fee_amount;
+
+        let token_client = token::Client::new(&env, &escrow.token);
+        if fee_amount > 0 {
+            token_client.transfer(&env.current_contract_address(), &treasury, &fee_amount);
+        }
+        token_client.transfer(
+            &env.current_contract_address(),
+            &escrow.freelancer,
+            &freelancer_payout,
+        );
+
+        let new_released = previously_released + amount;
+        env.storage().persistent().set(&released_key, &new_released);
+        env.storage().persistent().extend_ttl(&released_key, 100_000, 200_000);
+
+        let mut milestones = Self::get_milestones(env.clone(), job_id.clone())?;
+        if new_released >= milestone.amount {
+            for i in 0..milestones.len() {
+                let mut m = milestones.get(i).unwrap();
+                if m.id == milestone_id {
+                    m.approved = true;
+                    milestones.set(i, m);
+                    break;
+                }
+            }
+            env.storage()
+                .persistent()
+                .set(&DataKey::Milestones(job_id.clone()), &milestones);
+        }
+
+        escrow.released_amount += amount;
+        if escrow.status == EscrowStatus::Created {
+            escrow.status = EscrowStatus::InProgress;
+        }
+        if escrow.released_amount >= escrow.total_amount {
+            escrow.status = EscrowStatus::Completed;
+        }
+
+        extend_storage_ttl(&env, &job_id);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Escrow(job_id.clone()), &escrow);
+
+        EscrowEvents::milestone_partial_released(
+            &env,
+            job_id,
+            milestone_id,
+            amount,
+            freelancer_payout,
+            fee_amount,
+        );
+
+        Ok(milestone.amount - new_released)
+    }
+
+    /// Query the cumulative amount released for a milestone.
+    pub fn get_milestone_released_amount(
+        env: Env,
+        job_id: String,
+        milestone_id: u32,
+    ) -> i128 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::MilestoneReleased(job_id, milestone_id))
+            .unwrap_or(0)
+    }
+
+    /// Query the remaining unreleased amount for a milestone.
+    pub fn get_milestone_remaining_amount(
+        env: Env,
+        job_id: String,
+        milestone_id: u32,
+    ) -> Result<i128, EscrowError> {
+        let milestone = Self::get_milestone(env.clone(), job_id.clone(), milestone_id)?;
+        if milestone.approved {
+            return Ok(0);
+        }
+        let released = Self::get_milestone_released_amount(env, job_id, milestone_id);
+        Ok(milestone.amount - released)
+    }
 }

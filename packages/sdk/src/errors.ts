@@ -25,3 +25,10 @@ export class TransactionExecutionError extends EscrowSdkError {
     this.name = "TransactionExecutionError";
   }
 }
+
+export class NetworkError extends EscrowSdkError {
+  constructor(message: string, public readonly status?: number) {
+    super(message, "NETWORK_ERROR");
+    this.name = "NetworkError";
+  }
+}

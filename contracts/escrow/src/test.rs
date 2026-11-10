@@ -2147,3 +2147,116 @@ fn test_audit_log_counter_and_receipt_verification() {
     let non_existent = escrow_client.try_verify_audit_receipt(&999, &hash1);
     assert_eq!(non_existent.err(), Some(Ok(EscrowError::AuditIndexMismatch)));
 }
+
+#[test]
+fn test_contract_wasm_upgrade_authorization_and_timelock() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        admin,
+        _treasury,
+        client,
+        _freelancer,
+        _arbitrator,
+        _token_client,
+        _token_admin,
+        _token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let dummy_wasm_hash = BytesN::from_array(&env, &[99u8; 32]);
+
+    // Non-admin cannot stage upgrade
+    let unauthorized_stage = escrow_client.try_stage_upgrade(&client, &dummy_wasm_hash);
+    assert_eq!(unauthorized_stage.err(), Some(Ok(EscrowError::Unauthorized)));
+
+    // Non-admin cannot set upgrade delay
+    let unauthorized_delay = escrow_client.try_set_upgrade_delay(&client, &7200);
+    assert_eq!(unauthorized_delay.err(), Some(Ok(EscrowError::Unauthorized)));
+
+    // Delay lower than 3600 seconds rejected
+    let invalid_delay = escrow_client.try_set_upgrade_delay(&admin, &1800);
+    assert_eq!(invalid_delay.err(), Some(Ok(EscrowError::InvalidUpgradeDelay)));
+
+    // Set custom 7200s delay
+    escrow_client.set_upgrade_delay(&admin, &7200);
+    assert_eq!(escrow_client.get_upgrade_delay(), 7200);
+
+    // Stage upgrade
+    let now = env.ledger().timestamp();
+    let unlock_ts = escrow_client.stage_upgrade(&admin, &dummy_wasm_hash);
+    assert_eq!(unlock_ts, now + 7200);
+
+    let staged = escrow_client.get_staged_upgrade();
+    assert!(staged.is_some());
+    let (staged_hash, staged_unlock) = staged.unwrap();
+    assert_eq!(staged_hash, dummy_wasm_hash);
+    assert_eq!(staged_unlock, now + 7200);
+
+    // Premature execution fails with UpgradeTimelockActive
+    let premature_exec = escrow_client.try_execute_upgrade(&admin);
+    assert_eq!(premature_exec.err(), Some(Ok(EscrowError::UpgradeTimelockActive)));
+
+    // Cancel staged upgrade
+    escrow_client.cancel_staged_upgrade(&admin);
+    assert!(escrow_client.get_staged_upgrade().is_none());
+
+    // Executing when not staged fails with UpgradeNotStaged
+    let not_staged_exec = escrow_client.try_execute_upgrade(&admin);
+    assert_eq!(not_staged_exec.err(), Some(Ok(EscrowError::UpgradeNotStaged)));
+}
+
+#[test]
+fn test_governance_proposals_quorum_and_voting() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        admin,
+        _treasury,
+        client,
+        freelancer,
+        arbitrator,
+        _token_client,
+        _token_admin,
+        _token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let title = String::from_str(&env, "Protocol Parameter Revision");
+    let description = String::from_str(&env, "Lower base platform fee to 50 bps");
+    let quorum = 1000;
+    let duration = 3600;
+
+    let proposal_id = escrow_client.create_proposal(&admin, &title, &description, &quorum, &duration);
+    assert_eq!(proposal_id, 1);
+
+    let prop = escrow_client.get_proposal(&proposal_id);
+    assert_eq!(prop.votes_for, 0);
+    assert_eq!(prop.votes_against, 0);
+    assert_eq!(prop.quorum_threshold, quorum);
+
+    // Initial check: proposal has not passed
+    assert_eq!(escrow_client.is_proposal_passed(&proposal_id), false);
+
+    // Voter 1 casts 600 votes FOR
+    escrow_client.vote_proposal(&proposal_id, &client, &true, &600);
+    // Total votes 600 < 1000 quorum
+    assert_eq!(escrow_client.is_proposal_passed(&proposal_id), false);
+
+    // Voter 1 attempts duplicate vote
+    let dup_vote = escrow_client.try_vote_proposal(&proposal_id, &client, &true, &100);
+    assert_eq!(dup_vote.err(), Some(Ok(EscrowError::ProposalAlreadyVoted)));
+
+    // Voter 2 casts 500 votes FOR -> total votes 1100 >= 1000 quorum, FOR > AGAINST
+    escrow_client.vote_proposal(&proposal_id, &freelancer, &true, &500);
+    assert_eq!(escrow_client.is_proposal_passed(&proposal_id), true);
+
+    // Advance time past proposal duration
+    env.ledger().with_mut(|li| li.timestamp += 3601);
+
+    // Voting after expiration fails
+    let late_vote = escrow_client.try_vote_proposal(&proposal_id, &arbitrator, &false, &400);
+    assert_eq!(late_vote.err(), Some(Ok(EscrowError::ProposalExpired)));
+}

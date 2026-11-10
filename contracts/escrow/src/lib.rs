@@ -2170,4 +2170,37 @@ impl EscrowContract {
 
         Ok(total_refund)
     }
+
+    /// Returns comprehensive contract parameters, treasury, fee, pause status, and receipt sequence in a single call.
+    pub fn get_contract_info(env: Env) -> Result<ContractInfo, EscrowError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(EscrowError::NotInitialized)?;
+        let treasury: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Treasury)
+            .ok_or(EscrowError::NotInitialized)?;
+        let fee_bps: u32 = env.storage().instance().get(&DataKey::FeeBps).unwrap_or(0);
+        let is_paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        let receipt_counter: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ReceiptCounter)
+            .unwrap_or(0);
+
+        Ok(ContractInfo {
+            admin,
+            treasury,
+            fee_bps,
+            is_paused,
+            receipt_counter,
+        })
+    }
 }

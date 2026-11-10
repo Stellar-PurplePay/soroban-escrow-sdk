@@ -115,3 +115,13 @@ pub enum DataKey {
     ProposalVote(u64, Address),
     AccountNonce(Address),
 }
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContractInfo {
+    pub admin: Address,
+    pub treasury: Address,
+    pub fee_bps: u32,
+    pub is_paused: bool,
+    pub receipt_counter: u64,
+}

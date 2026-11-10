@@ -70,6 +70,20 @@ pub struct ArbitratorVote {
 }
 
 #[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GovernanceProposal {
+    pub id: u64,
+    pub proposer: Address,
+    pub title: String,
+    pub description: String,
+    pub votes_for: i128,
+    pub votes_against: i128,
+    pub quorum_threshold: i128,
+    pub end_timestamp: u64,
+    pub executed: bool,
+}
+
+#[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
     Admin,
@@ -93,4 +107,10 @@ pub enum DataKey {
     EmergencyFreezeActive,
     AuditLogCounter,
     AuditLogReceipt(u64),
+    StagedUpgradeHash,
+    StagedUpgradeUnlock,
+    UpgradeDelay,
+    ProposalCount,
+    Proposal(u64),
+    ProposalVote(u64, Address),
 }

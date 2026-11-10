@@ -154,4 +154,24 @@ impl EscrowEvents {
         env.events()
             .publish((symbol_short!("audit"), symbol_short!("log")), (index, action, record_hash));
     }
+
+    pub fn upgrade_staged(env: &Env, admin: Address, new_wasm_hash: BytesN<32>, unlock_timestamp: u64) {
+        env.events()
+            .publish((symbol_short!("upgrade"), symbol_short!("staged")), (admin, new_wasm_hash, unlock_timestamp));
+    }
+
+    pub fn upgrade_executed(env: &Env, admin: Address, new_wasm_hash: BytesN<32>) {
+        env.events()
+            .publish((symbol_short!("upgrade"), symbol_short!("exec")), (admin, new_wasm_hash));
+    }
+
+    pub fn proposal_created(env: &Env, proposal_id: u64, proposer: Address) {
+        env.events()
+            .publish((symbol_short!("gov"), symbol_short!("create")), (proposal_id, proposer));
+    }
+
+    pub fn proposal_voted(env: &Env, proposal_id: u64, voter: Address, support: bool, weight: i128) {
+        env.events()
+            .publish((symbol_short!("gov"), symbol_short!("vote")), (proposal_id, voter, support, weight));
+    }
 }

@@ -1653,4 +1653,238 @@ impl EscrowContract {
             None => Err(EscrowError::AuditIndexMismatch),
         }
     }
+
+    /// Set upgrade timelock delay in seconds (admin only, minimum 3600 seconds).
+    pub fn set_upgrade_delay(
+        env: Env,
+        admin: Address,
+        delay_seconds: u64,
+    ) -> Result<(), EscrowError> {
+        admin.require_auth();
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(EscrowError::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(EscrowError::Unauthorized);
+        }
+
+        if delay_seconds < 3600 {
+            return Err(EscrowError::InvalidUpgradeDelay);
+        }
+
+        env.storage()
+            .instance()
+            .set(&DataKey::UpgradeDelay, &delay_seconds);
+        Ok(())
+    }
+
+    /// Query the upgrade timelock delay in seconds (defaults to 86_400).
+    pub fn get_upgrade_delay(env: Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::UpgradeDelay)
+            .unwrap_or(86_400)
+    }
+
+    /// Stage a contract Wasm bytecode upgrade with timelock protection (admin only).
+    pub fn stage_upgrade(
+        env: Env,
+        admin: Address,
+        new_wasm_hash: BytesN<32>,
+    ) -> Result<u64, EscrowError> {
+        admin.require_auth();
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(EscrowError::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(EscrowError::Unauthorized);
+        }
+
+        let delay = Self::get_upgrade_delay(env.clone());
+        let unlock_timestamp = env.ledger().timestamp() + delay;
+
+        env.storage()
+            .instance()
+            .set(&DataKey::StagedUpgradeHash, &new_wasm_hash);
+        env.storage()
+            .instance()
+            .set(&DataKey::StagedUpgradeUnlock, &unlock_timestamp);
+
+        EscrowEvents::upgrade_staged(&env, admin, new_wasm_hash, unlock_timestamp);
+        Ok(unlock_timestamp)
+    }
+
+    /// Query the currently staged contract upgrade, if any.
+    pub fn get_staged_upgrade(env: Env) -> Option<(BytesN<32>, u64)> {
+        let hash: BytesN<32> = env.storage().instance().get(&DataKey::StagedUpgradeHash)?;
+        let unlock_ts: u64 = env.storage().instance().get(&DataKey::StagedUpgradeUnlock)?;
+        Some((hash, unlock_ts))
+    }
+
+    /// Cancel a previously staged contract upgrade (admin only).
+    pub fn cancel_staged_upgrade(env: Env, admin: Address) -> Result<(), EscrowError> {
+        admin.require_auth();
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(EscrowError::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(EscrowError::Unauthorized);
+        }
+
+        env.storage().instance().remove(&DataKey::StagedUpgradeHash);
+        env.storage().instance().remove(&DataKey::StagedUpgradeUnlock);
+        Ok(())
+    }
+
+    /// Execute the staged contract upgrade once timelock delay has elapsed (admin only).
+    pub fn execute_upgrade(env: Env, admin: Address) -> Result<(), EscrowError> {
+        admin.require_auth();
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(EscrowError::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(EscrowError::Unauthorized);
+        }
+
+        let staged_hash: BytesN<32> = env
+            .storage()
+            .instance()
+            .get(&DataKey::StagedUpgradeHash)
+            .ok_or(EscrowError::UpgradeNotStaged)?;
+
+        let unlock_timestamp: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::StagedUpgradeUnlock)
+            .ok_or(EscrowError::UpgradeNotStaged)?;
+
+        let now = env.ledger().timestamp();
+        if now < unlock_timestamp {
+            return Err(EscrowError::UpgradeTimelockActive);
+        }
+
+        env.deployer().update_current_contract_wasm(staged_hash.clone());
+
+        env.storage().instance().remove(&DataKey::StagedUpgradeHash);
+        env.storage().instance().remove(&DataKey::StagedUpgradeUnlock);
+
+        EscrowEvents::upgrade_executed(&env, admin, staged_hash);
+        Ok(())
+    }
+
+    /// Create a governance proposal with a voting duration and quorum threshold.
+    pub fn create_proposal(
+        env: Env,
+        proposer: Address,
+        title: String,
+        description: String,
+        quorum_threshold: i128,
+        duration_seconds: u64,
+    ) -> Result<u64, EscrowError> {
+        ensure_not_paused(&env)?;
+        proposer.require_auth();
+
+        if quorum_threshold <= 0 {
+            return Err(EscrowError::InvalidAmount);
+        }
+
+        let current_count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ProposalCount)
+            .unwrap_or(0);
+        let proposal_id = current_count + 1;
+        env.storage()
+            .instance()
+            .set(&DataKey::ProposalCount, &proposal_id);
+
+        let end_timestamp = env.ledger().timestamp() + duration_seconds;
+        let proposal = GovernanceProposal {
+            id: proposal_id,
+            proposer: proposer.clone(),
+            title,
+            description,
+            votes_for: 0,
+            votes_against: 0,
+            quorum_threshold,
+            end_timestamp,
+            executed: false,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Proposal(proposal_id), &proposal);
+
+        EscrowEvents::proposal_created(&env, proposal_id, proposer);
+        Ok(proposal_id)
+    }
+
+    /// Cast a weighted vote on an active governance proposal.
+    pub fn vote_proposal(
+        env: Env,
+        proposal_id: u64,
+        voter: Address,
+        support: bool,
+        weight: i128,
+    ) -> Result<(), EscrowError> {
+        ensure_not_paused(&env)?;
+        voter.require_auth();
+
+        if weight <= 0 {
+            return Err(EscrowError::InvalidAmount);
+        }
+
+        let vote_key = DataKey::ProposalVote(proposal_id, voter.clone());
+        if env.storage().persistent().has(&vote_key) {
+            return Err(EscrowError::ProposalAlreadyVoted);
+        }
+
+        let proposal_key = DataKey::Proposal(proposal_id);
+        let mut proposal: GovernanceProposal = env
+            .storage()
+            .persistent()
+            .get(&proposal_key)
+            .ok_or(EscrowError::ProposalNotFound)?;
+
+        if env.ledger().timestamp() > proposal.end_timestamp {
+            return Err(EscrowError::ProposalExpired);
+        }
+
+        if support {
+            proposal.votes_for += weight;
+        } else {
+            proposal.votes_against += weight;
+        }
+
+        env.storage().persistent().set(&proposal_key, &proposal);
+        env.storage().persistent().set(&vote_key, &true);
+
+        EscrowEvents::proposal_voted(&env, proposal_id, voter, support, weight);
+        Ok(())
+    }
+
+    /// Query a governance proposal by ID.
+    pub fn get_proposal(env: Env, proposal_id: u64) -> Result<GovernanceProposal, EscrowError> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Proposal(proposal_id))
+            .ok_or(EscrowError::ProposalNotFound)
+    }
+
+    /// Determine whether a governance proposal met quorum and passed.
+    pub fn is_proposal_passed(env: Env, proposal_id: u64) -> Result<bool, EscrowError> {
+        let proposal = Self::get_proposal(env, proposal_id)?;
+        let total_votes = proposal.votes_for + proposal.votes_against;
+        let quorum_met = total_votes >= proposal.quorum_threshold;
+        let passed = quorum_met && (proposal.votes_for > proposal.votes_against);
+        Ok(passed)
+    }
 }

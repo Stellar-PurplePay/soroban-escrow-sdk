@@ -34,4 +34,10 @@ pub enum EscrowError {
     FreezePeriodActive = 28,
     FreezePeriodNotExpired = 29,
     AuditIndexMismatch = 30,
+    UpgradeNotStaged = 31,
+    UpgradeTimelockActive = 32,
+    InvalidUpgradeDelay = 33,
+    ProposalNotFound = 34,
+    ProposalAlreadyVoted = 35,
+    ProposalExpired = 36,
 }

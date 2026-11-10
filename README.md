@@ -7,7 +7,7 @@
 ---
 
 [![CI](https://github.com/Stellar-PurplePay/soroban-escrow-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/Stellar-PurplePay/soroban-escrow-sdk/actions/workflows/ci.yml)
-[![Version: 0.2.0](https://img.shields.io/badge/version-0.2.0-blue.svg)](packages/sdk/package.json)
+[![Version: 0.3.0](https://img.shields.io/badge/version-0.3.0-blue.svg)](packages/sdk/package.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Stellar Soroban](https://img.shields.io/badge/Stellar-Soroban%20v27-08B5E5.svg?logo=stellar)](https://stellar.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8%2B-3178C6.svg?logo=typescript)](https://www.typescriptlang.org)
@@ -15,6 +15,14 @@
 [![Security Policy](https://img.shields.io/badge/Security-Policy-blue.svg)](SECURITY.md)
 [![Code of Conduct](https://img.shields.io/badge/Contributor-Covenant-green.svg)](CODE_OF_CONDUCT.md)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+
+---
+
+## 🏷️ Repository Tags & Topics
+
+```text
+stellar, soroban, escrow, smart-contracts, typescript-sdk, rust, wasm, payments, sep-10, sep-41, milestone-payments, freighter
+```
 
 ---
 
@@ -32,17 +40,18 @@
 
 ---
 
-## 🌟 Key Capabilities & Security Guarantees
+## 🌟 Key Capabilities & Architectural Guarantees
 
-- 🔒 **100% Non-Custodial Escrow**: Funds are locked inside the Soroban contract balance. Neither the platform admin nor any third party can unilaterally seize funds.
-- 🎯 **Pro-Rata Milestone Payouts**: Define granular milestone percentages (e.g. 25% / 25% / 50%). Approving a milestone releases that portion while keeping remaining milestones safely escrowed.
-- 🧮 **Dust-Free Token Math**: Integer stroop division calculates exact allocations, automatically assigning rounding remainders to the final milestone so zero tokens remain trapped in custody.
+- 🔒 **100% Non-Custodial Escrow**: Funds are locked exclusively inside the Soroban contract custody balance. Neither the platform admin nor any third party can unilaterally seize funds.
+- 🎯 **Pro-Rata Milestone Payouts**: Define granular milestone percentages (e.g. 25% / 25% / 50%). Approving a milestone dispatches its exact allocated portion while keeping remaining milestones safely escrowed.
+- 🧮 **Dust-Free Stroop Math**: Integer stroop division calculates exact allocations, automatically assigning rounding remainders to the final milestone so zero tokens remain trapped in custody.
 - 🛡️ **On-Chain Fee Protection (PP-11)**: Hard on-chain ceiling constant `MAX_FEE_BPS = 1_000` (10.00% maximum platform fee). Any attempt to exceed 10% reverts with `EscrowError::InvalidFee`.
 - 🛑 **Milestone Bounds & DoS Resistance (PP-14)**: Milestones are capped at a maximum of 25 items (`MAX_MILESTONES = 25`), descriptions are bounded to 256 bytes, and percentages are checked for arithmetic overflow.
-- 📐 **Zero-Loss Precision (PP-12)**: TypeScript SDK utility `toAtomicUnits` validates fractional digits against the token's decimal precision, strictly rejecting excess decimal precision, negative numbers, and scientific notation.
+- 📐 **Zero-Loss Monetary Precision (PP-12)**: TypeScript SDK utility `toAtomicUnits` validates fractional digits against the token's decimal precision, strictly rejecting excess decimal precision, negative numbers, and scientific notation.
 - 🔑 **Cryptographic StrKey Validation (PP-13)**: Address inputs are checked via `@stellar/stellar-sdk`'s `StrKey` validators, ensuring base32 validity and CRC16-XModem checksum integrity.
 - ⏱️ **Permissionless Timeout Refunds**: If a milestone expires past its deadline, the client can reclaim unreleased funds directly from the contract.
 - ⚖️ **Tripartite Dispute Arbitration**: Counterparties can escalate disputes to a designated arbitrator with on-chain authority to split funds.
+- 🔐 **SEP-0010 Stellar Web Authentication**: Integrated `Sep10Client` providing end-to-end challenge retrieval, Freighter signing, and JWT session exchange.
 
 ---
 
@@ -99,7 +108,7 @@ sequenceDiagram
 # Navigate to contract directory
 cd contracts/escrow
 
-# Run unit and integration tests
+# Run 47 unit, property, and integration tests
 cargo test
 
 # Enforce zero-warning clippy linting
@@ -113,7 +122,7 @@ cargo build --target wasm32v1-none --release
 ```
 
 Compiled WASM bytecode will be located at:
-`target/wasm32v1-none/release/soroban_escrow_contract.wasm`
+`contracts/escrow/target/wasm32v1-none/release/soroban_escrow_contract.wasm`
 
 ---
 
@@ -124,7 +133,7 @@ Compiled WASM bytecode will be located at:
 npm install @stellar-purplepay/escrow-sdk @stellar/stellar-sdk
 ```
 
-### Complete Code Example
+### Complete Code Example: Milestone Escrow Lifecycle
 ```typescript
 import { EscrowClient, toAtomicUnits, fromAtomicUnits } from "@stellar-purplepay/escrow-sdk";
 
@@ -165,20 +174,44 @@ const releasePayload = client.prepareReleaseMilestone({
 console.log("Release Payload:", releasePayload);
 ```
 
+### SEP-0010 Web Authentication Client Example
+```typescript
+import { Sep10Client } from "@stellar-purplepay/escrow-sdk";
+
+const sep10 = new Sep10Client({
+  authEndpoint: "https://stellarpurplepay.vercel.app/api/auth/challenge",
+  tokenEndpoint: "https://stellarpurplepay.vercel.app/api/auth/token",
+  networkPassphrase: "Test SDF Network ; September 2015",
+  homeDomain: "stellarpurplepay.vercel.app",
+});
+
+// 1. Fetch challenge transaction XDR
+const { transactionXdr, networkPassphrase } = await sep10.getChallenge(
+  "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7"
+);
+
+// 2. Sign with Freighter or hardware wallet (simulated here)
+// const signedXdr = await window.freighter.signTransaction(transactionXdr, { networkPassphrase });
+
+// 3. Exchange signed transaction for JWT session token
+// const { token } = await sep10.exchangeToken(signedXdr);
+```
+
 ---
 
-## 🧪 Testing
-
-The repository maintains full end-to-end test coverage for both Rust and TypeScript:
+## 🧪 Comprehensive Quality Assurance & Tests
 
 ```bash
-# Test Rust Contract (Unit & Integration)
+# 1. Test Rust Contract (47 Unit, Concurrency, and Property Tests)
 cd contracts/escrow
 cargo test
 
-# Test TypeScript SDK (Jest)
+# 2. Test TypeScript SDK (37 Test Suites / 226 Tests)
 cd ../../packages/sdk
 npm test
+
+# 3. Compile TypeScript SDK
+npm run build
 ```
 
 ---
@@ -194,21 +227,25 @@ soroban-escrow-sdk/
 │           ├── lib.rs              # Contract entrypoints, state transitions & fee ceiling
 │           ├── types.rs            # Data structures, EscrowStatus & storage keys
 │           ├── errors.rs           # Typed Soroban contract errors (16–18 added)
-│           └── test.rs             # Full unit test suite (auth, math, milestones, ceilings)
+│           └── test.rs             # 47 unit & property tests (auth, math, milestones, ceilings)
 ├── packages/
 │   └── sdk/                        # TypeScript client SDK
 │       ├── package.json            # @stellar-purplepay/escrow-sdk package definition
 │       ├── tsconfig.json           # Strict TypeScript configuration
 │       ├── src/
 │           ├── client.ts           # EscrowClient implementation
+│           ├── sep10Client.ts      # SEP-0010 Stellar Web Authentication client
+│           ├── estimator.ts        # Soroban footprint and gas fee estimation
 │           ├── types.ts            # Type interfaces and argument DTOs
 │           ├── utils.ts            # Precision stroop conversion & StrKey checksum validation
 │           └── errors.ts           # ValidationError & ClientError hierarchies
-│       └── test/                   # Jest unit test suite (14 test cases)
+│       └── test/                   # 37 Jest test suites / 226 tests
+├── docs/
+│   └── SEP10_INTEGRATION_GUIDE.md  # Comprehensive guide for SEP-0010 authentication
 ├── examples/
 │   └── quickstart.ts               # End-to-end integration walkthrough
 ├── .github/
-│   └── workflows/ci.yml            # Automated GitHub Actions CI (Rust, Clippy, SDK)
+│   └── workflows/ci.yml            # Automated GitHub Actions CI (Rust, Clippy, Node 18/20 Matrix)
 ├── CHANGELOG.md                    # Release history and audit remediation log
 ├── CODE_OF_CONDUCT.md              # Contributor Covenant v2.1
 ├── CONTRIBUTING.md                 # Development, formatting, and PR guidelines

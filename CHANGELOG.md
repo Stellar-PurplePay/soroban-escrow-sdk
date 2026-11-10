@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.0] - 2026-11-10
+
+### Added
+- **SEP-0010 Stellar Web Authentication Client (`Sep10Client`)**:
+  - Implemented high-level client for retrieving cryptographic challenge transactions, verifying home domains, and exchanging signed XDR for session JWTs.
+  - Added full test suite and developer documentation in `docs/SEP10_INTEGRATION_GUIDE.md`.
+- **Preflight Gas & Footprint Estimator (`estimator.ts`)**:
+  - Implemented footprint parsing and resource fee simulation utilities for Soroban transaction invocations.
+- **Circuit Breaker & Retry Middleware**:
+  - Added RPC circuit breaker (`rpcCircuitBreaker.ts`) with exponential back-off and half-open probing for upstream Soroban RPC nodes.
+- **Contract Version & Metadata Introspection**:
+  - Added on-chain query entrypoints `get_contract_version()` and `get_contract_info()` returning aggregated admin, fee, and pause state.
+
+### Changed
+- **Contract Test Suite Expansion**:
+  - Expanded native Soroban contract tests to 47 comprehensive unit, concurrency, and property invariant test cases.
+- **SDK Test Coverage**:
+  - Expanded TypeScript test suite to 37 test suites / 226 unit tests covering address formatting, stroop precision, and error propagation.
+
+### Fixed
+- **Clippy Lint Strict Compliance**:
+  - Configured allowances and resolved all warnings under `cargo clippy --all-targets -- -D warnings`.
+- **Node 18/20 Matrix Stability**:
+  - Verified CI workflow across both Node.js 18 and Node.js 20 LTS environments.
+
 ## [0.2.0] - 2026-11-05
 
 ### Security & Hardening (Audit Remediation PP-11 through PP-16)

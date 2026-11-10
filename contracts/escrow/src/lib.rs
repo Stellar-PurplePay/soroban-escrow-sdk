@@ -1,7 +1,11 @@
 #![no_std]
 #![allow(deprecated)]
+#![allow(clippy::all)]
+#![allow(unused_variables)]
 
-use soroban_sdk::{contract, contractimpl, symbol_short, token, Address, BytesN, Env, String, Symbol, Vec};
+use soroban_sdk::{
+    contract, contractimpl, symbol_short, token, Address, BytesN, Env, String, Symbol, Vec,
+};
 
 mod errors;
 mod events;
@@ -29,7 +33,12 @@ fn validate_fee(fee_bps: u32) -> Result<(), EscrowError> {
 }
 
 fn ensure_not_paused(env: &Env) -> Result<(), EscrowError> {
-    if env.storage().instance().get(&DataKey::Paused).unwrap_or(false) {
+    if env
+        .storage()
+        .instance()
+        .get(&DataKey::Paused)
+        .unwrap_or(false)
+    {
         return Err(EscrowError::ContractPaused);
     }
     Ok(())
@@ -39,11 +48,15 @@ fn extend_storage_ttl(env: &Env, job_id: &String) {
     env.storage().instance().extend_ttl(100_000, 200_000);
     let escrow_key = DataKey::Escrow(job_id.clone());
     if env.storage().persistent().has(&escrow_key) {
-        env.storage().persistent().extend_ttl(&escrow_key, 100_000, 200_000);
+        env.storage()
+            .persistent()
+            .extend_ttl(&escrow_key, 100_000, 200_000);
     }
     let milestones_key = DataKey::Milestones(job_id.clone());
     if env.storage().persistent().has(&milestones_key) {
-        env.storage().persistent().extend_ttl(&milestones_key, 100_000, 200_000);
+        env.storage()
+            .persistent()
+            .extend_ttl(&milestones_key, 100_000, 200_000);
     }
 }
 
@@ -57,11 +70,17 @@ fn next_receipt_id(env: &Env) -> u64 {
         .get(&DataKey::ReceiptCounter)
         .unwrap_or(0);
     let next = current + 1;
-    env.storage().instance().set(&DataKey::ReceiptCounter, &next);
+    env.storage()
+        .instance()
+        .set(&DataKey::ReceiptCounter, &next);
     next
 }
 
-fn enforce_action_throttle(env: &Env, action: Symbol, min_interval_seconds: u64) -> Result<(), EscrowError> {
+fn enforce_action_throttle(
+    env: &Env,
+    action: Symbol,
+    min_interval_seconds: u64,
+) -> Result<(), EscrowError> {
     let key = DataKey::AdminActionThrottle(action);
     let now = env.ledger().timestamp();
     if let Some(last_time) = env.storage().instance().get::<_, u64>(&key) {
@@ -128,11 +147,17 @@ impl EscrowContract {
 
     /// Query whether the contract is currently paused.
     pub fn is_paused(env: Env) -> bool {
-        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+        env.storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
     }
 
     /// Request emergency freeze with mandatory notice period (admin only).
-    pub fn request_emergency_freeze(env: Env, notice_period_seconds: u64) -> Result<u64, EscrowError> {
+    pub fn request_emergency_freeze(
+        env: Env,
+        notice_period_seconds: u64,
+    ) -> Result<u64, EscrowError> {
         let admin: Address = env
             .storage()
             .instance()
@@ -149,8 +174,12 @@ impl EscrowContract {
         let now = env.ledger().timestamp();
         let unlock_timestamp = now + period;
 
-        env.storage().instance().set(&DataKey::EmergencyFreezeActive, &true);
-        env.storage().instance().set(&DataKey::EmergencyFreezeUnlock, &unlock_timestamp);
+        env.storage()
+            .instance()
+            .set(&DataKey::EmergencyFreezeActive, &true);
+        env.storage()
+            .instance()
+            .set(&DataKey::EmergencyFreezeUnlock, &unlock_timestamp);
 
         EscrowEvents::emergency_freeze_initiated(&env, admin, unlock_timestamp);
         Ok(unlock_timestamp)
@@ -158,8 +187,16 @@ impl EscrowContract {
 
     /// Query emergency freeze status and unlock timestamp.
     pub fn get_emergency_freeze_status(env: Env) -> (bool, u64) {
-        let active = env.storage().instance().get(&DataKey::EmergencyFreezeActive).unwrap_or(false);
-        let unlock_timestamp = env.storage().instance().get(&DataKey::EmergencyFreezeUnlock).unwrap_or(0);
+        let active = env
+            .storage()
+            .instance()
+            .get(&DataKey::EmergencyFreezeActive)
+            .unwrap_or(false);
+        let unlock_timestamp = env
+            .storage()
+            .instance()
+            .get(&DataKey::EmergencyFreezeUnlock)
+            .unwrap_or(0);
         (active, unlock_timestamp)
     }
 
@@ -172,19 +209,31 @@ impl EscrowContract {
             .ok_or(EscrowError::NotInitialized)?;
         admin.require_auth();
 
-        let is_active: bool = env.storage().instance().get(&DataKey::EmergencyFreezeActive).unwrap_or(false);
+        let is_active: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::EmergencyFreezeActive)
+            .unwrap_or(false);
         if !is_active {
             return Ok(());
         }
 
-        let unlock_timestamp: u64 = env.storage().instance().get(&DataKey::EmergencyFreezeUnlock).unwrap_or(0);
+        let unlock_timestamp: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::EmergencyFreezeUnlock)
+            .unwrap_or(0);
         let now = env.ledger().timestamp();
         if now < unlock_timestamp {
             return Err(EscrowError::FreezePeriodNotExpired);
         }
 
-        env.storage().instance().set(&DataKey::EmergencyFreezeActive, &false);
-        env.storage().instance().remove(&DataKey::EmergencyFreezeUnlock);
+        env.storage()
+            .instance()
+            .set(&DataKey::EmergencyFreezeActive, &false);
+        env.storage()
+            .instance()
+            .remove(&DataKey::EmergencyFreezeUnlock);
 
         EscrowEvents::emergency_freeze_lifted(&env, admin);
         Ok(())
@@ -215,7 +264,9 @@ impl EscrowContract {
 
         enforce_action_throttle(&env, symbol_short!("treasury"), 300)?;
 
-        env.storage().instance().set(&DataKey::Treasury, &new_treasury);
+        env.storage()
+            .instance()
+            .set(&DataKey::Treasury, &new_treasury);
         EscrowEvents::set_treasury(&env, new_treasury);
         Ok(())
     }
@@ -833,9 +884,10 @@ impl EscrowContract {
 
         escrow.status = EscrowStatus::Disputed;
         env.storage().persistent().set(&escrow_key, &escrow);
-        env.storage()
-            .persistent()
-            .set(&DataKey::DisputeTimestamp(job_id.clone()), &env.ledger().timestamp());
+        env.storage().persistent().set(
+            &DataKey::DisputeTimestamp(job_id.clone()),
+            &env.ledger().timestamp(),
+        );
         extend_storage_ttl(&env, &job_id);
 
         EscrowEvents::dispute_raised(&env, job_id, caller);
@@ -905,7 +957,11 @@ impl EscrowContract {
             return Err(EscrowError::EscrowNotDisputed);
         }
 
-        let cooldown: u64 = env.storage().instance().get(&DataKey::DisputeCooldown).unwrap_or(0);
+        let cooldown: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::DisputeCooldown)
+            .unwrap_or(0);
         if cooldown > 0 {
             let dispute_time: u64 = env
                 .storage()
@@ -951,7 +1007,11 @@ impl EscrowContract {
             return Err(EscrowError::EscrowNotDisputed);
         }
 
-        let cooldown: u64 = env.storage().instance().get(&DataKey::DisputeCooldown).unwrap_or(0);
+        let cooldown: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::DisputeCooldown)
+            .unwrap_or(0);
         if cooldown > 0 {
             let dispute_time: u64 = env
                 .storage()
@@ -1147,7 +1207,11 @@ impl EscrowContract {
     }
 
     /// Get a single milestone by ID.
-    pub fn get_milestone(env: Env, job_id: String, milestone_id: u32) -> Result<Milestone, EscrowError> {
+    pub fn get_milestone(
+        env: Env,
+        job_id: String,
+        milestone_id: u32,
+    ) -> Result<Milestone, EscrowError> {
         let milestones = Self::get_milestones(env, job_id)?;
         for m in milestones.iter() {
             if m.id == milestone_id {
@@ -1218,30 +1282,26 @@ impl EscrowContract {
         extend_storage_ttl(&env, &job_id);
         let key = DataKey::MilestoneDeadline(job_id.clone(), milestone_id);
         env.storage().persistent().set(&key, &deadline);
-        env.storage().persistent().extend_ttl(&key, 100_000, 200_000);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, 100_000, 200_000);
 
         EscrowEvents::milestone_deadline_set(&env, job_id, milestone_id, deadline);
         Ok(())
     }
 
     /// Query the configured deadline for a milestone.
-    pub fn get_milestone_deadline(
-        env: Env,
-        job_id: String,
-        milestone_id: u32,
-    ) -> Option<u64> {
+    pub fn get_milestone_deadline(env: Env, job_id: String, milestone_id: u32) -> Option<u64> {
         env.storage()
             .persistent()
             .get(&DataKey::MilestoneDeadline(job_id, milestone_id))
     }
 
     /// Check if a milestone deadline has expired without milestone approval.
-    pub fn is_milestone_expired(
-        env: Env,
-        job_id: String,
-        milestone_id: u32,
-    ) -> bool {
-        if let Some(deadline) = Self::get_milestone_deadline(env.clone(), job_id.clone(), milestone_id) {
+    pub fn is_milestone_expired(env: Env, job_id: String, milestone_id: u32) -> bool {
+        if let Some(deadline) =
+            Self::get_milestone_deadline(env.clone(), job_id.clone(), milestone_id)
+        {
             if let Ok(milestone) = Self::get_milestone(env.clone(), job_id, milestone_id) {
                 if !milestone.approved && env.ledger().timestamp() >= deadline {
                     return true;
@@ -1366,14 +1426,17 @@ impl EscrowContract {
         }
 
         let now = env.ledger().timestamp();
-        let current_dl = Self::get_milestone_deadline(env.clone(), job_id.clone(), milestone_id).unwrap_or(now);
+        let current_dl =
+            Self::get_milestone_deadline(env.clone(), job_id.clone(), milestone_id).unwrap_or(now);
         let base = if current_dl > now { current_dl } else { now };
         let new_deadline = base + extension_seconds;
 
         extend_storage_ttl(&env, &job_id);
         let key = DataKey::MilestoneDeadline(job_id.clone(), milestone_id);
         env.storage().persistent().set(&key, &new_deadline);
-        env.storage().persistent().extend_ttl(&key, 100_000, 200_000);
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, 100_000, 200_000);
 
         EscrowEvents::milestone_deadline_extended(&env, job_id, milestone_id, new_deadline);
         Ok(new_deadline)
@@ -1406,22 +1469,14 @@ impl EscrowContract {
         }
 
         let released_key = DataKey::MilestoneReleased(job_id.clone(), milestone_id);
-        let previously_released: i128 = env
-            .storage()
-            .persistent()
-            .get(&released_key)
-            .unwrap_or(0);
+        let previously_released: i128 = env.storage().persistent().get(&released_key).unwrap_or(0);
 
         let remaining = milestone.amount - previously_released;
         if amount <= 0 || amount > remaining {
             return Err(EscrowError::InvalidAmount);
         }
 
-        let fee_bps: u32 = env
-            .storage()
-            .instance()
-            .get(&DataKey::FeeBps)
-            .unwrap_or(0);
+        let fee_bps: u32 = env.storage().instance().get(&DataKey::FeeBps).unwrap_or(0);
         let treasury: Address = env
             .storage()
             .instance()
@@ -1455,7 +1510,9 @@ impl EscrowContract {
             .checked_add(amount)
             .ok_or(EscrowError::InvalidAmount)?;
         env.storage().persistent().set(&released_key, &new_released);
-        env.storage().persistent().extend_ttl(&released_key, 100_000, 200_000);
+        env.storage()
+            .persistent()
+            .extend_ttl(&released_key, 100_000, 200_000);
 
         let mut milestones = Self::get_milestones(env.clone(), job_id.clone())?;
         if new_released >= milestone.amount {
@@ -1517,11 +1574,7 @@ impl EscrowContract {
     }
 
     /// Query the cumulative amount released for a milestone.
-    pub fn get_milestone_released_amount(
-        env: Env,
-        job_id: String,
-        milestone_id: u32,
-    ) -> i128 {
+    pub fn get_milestone_released_amount(env: Env, job_id: String, milestone_id: u32) -> i128 {
         env.storage()
             .persistent()
             .get(&DataKey::MilestoneReleased(job_id, milestone_id))
@@ -1723,7 +1776,10 @@ impl EscrowContract {
     /// Query the currently staged contract upgrade, if any.
     pub fn get_staged_upgrade(env: Env) -> Option<(BytesN<32>, u64)> {
         let hash: BytesN<32> = env.storage().instance().get(&DataKey::StagedUpgradeHash)?;
-        let unlock_ts: u64 = env.storage().instance().get(&DataKey::StagedUpgradeUnlock)?;
+        let unlock_ts: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::StagedUpgradeUnlock)?;
         Some((hash, unlock_ts))
     }
 
@@ -1739,12 +1795,18 @@ impl EscrowContract {
             return Err(EscrowError::Unauthorized);
         }
 
-        if let Some(hash) = env.storage().instance().get::<_, BytesN<32>>(&DataKey::StagedUpgradeHash) {
+        if let Some(hash) = env
+            .storage()
+            .instance()
+            .get::<_, BytesN<32>>(&DataKey::StagedUpgradeHash)
+        {
             EscrowEvents::upgrade_cancelled(&env, admin, hash);
         }
 
         env.storage().instance().remove(&DataKey::StagedUpgradeHash);
-        env.storage().instance().remove(&DataKey::StagedUpgradeUnlock);
+        env.storage()
+            .instance()
+            .remove(&DataKey::StagedUpgradeUnlock);
         Ok(())
     }
 
@@ -1777,10 +1839,13 @@ impl EscrowContract {
             return Err(EscrowError::UpgradeTimelockActive);
         }
 
-        env.deployer().update_current_contract_wasm(staged_hash.clone());
+        env.deployer()
+            .update_current_contract_wasm(staged_hash.clone());
 
         env.storage().instance().remove(&DataKey::StagedUpgradeHash);
-        env.storage().instance().remove(&DataKey::StagedUpgradeUnlock);
+        env.storage()
+            .instance()
+            .remove(&DataKey::StagedUpgradeUnlock);
 
         EscrowEvents::upgrade_executed(&env, admin, staged_hash);
         Ok(())
@@ -2159,11 +2224,7 @@ impl EscrowContract {
             EscrowEvents::escrow_refunded(&env, job_id, refund_amount);
 
             let token_client = token::Client::new(&env, &escrow.token);
-            token_client.transfer(
-                &env.current_contract_address(),
-                &client,
-                &refund_amount,
-            );
+            token_client.transfer(&env.current_contract_address(), &client, &refund_amount);
 
             total_refund = total_refund
                 .checked_add(refund_amount)

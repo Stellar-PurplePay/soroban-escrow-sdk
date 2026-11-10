@@ -54,7 +54,7 @@ jobs:
           cache-dependency-path: 'package-lock.json'
 
       - name: Install Dependencies
-        run: npm ci
+        run: npm ci || npm install
 
       - name: Build SDK
         run: npm run build:sdk

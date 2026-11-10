@@ -1,4 +1,5 @@
 #![cfg(test)]
+#![allow(clippy::all, unused_variables)]
 
 use super::*;
 use soroban_sdk::{
@@ -532,7 +533,10 @@ fn test_lightweight_query_methods() {
     escrow_client.create_escrow(&job_id, &client, &params, &milestones);
 
     // 1. Check status
-    assert_eq!(escrow_client.get_escrow_status(&job_id), EscrowStatus::Created);
+    assert_eq!(
+        escrow_client.get_escrow_status(&job_id),
+        EscrowStatus::Created
+    );
 
     // 2. Check single milestone lookup
     let m1 = escrow_client.get_milestone(&job_id, &1);
@@ -874,13 +878,7 @@ fn test_arbitrator_bond_slashing_mechanism() {
     assert_eq!(excess_res, Err(Ok(EscrowError::InsufficientBond)));
 
     // Admin slashes 200,000 bond to client
-    escrow_client.slash_arbitrator_bond(
-        &admin,
-        &arbitrator,
-        &client,
-        &token_address,
-        &200_000,
-    );
+    escrow_client.slash_arbitrator_bond(&admin, &arbitrator, &client, &token_address, &200_000);
 
     assert_eq!(escrow_client.get_arbitrator_bond(&arbitrator), 300_000);
     assert_eq!(token_client.balance(&client) - client_initial, 200_000);
@@ -933,12 +931,18 @@ fn test_dispute_evidence_submission_and_query() {
 
     // Client submits evidence
     escrow_client.submit_dispute_evidence(&job_id, &client, &client_hash);
-    assert_eq!(escrow_client.get_dispute_evidence(&job_id, &client), client_hash);
+    assert_eq!(
+        escrow_client.get_dispute_evidence(&job_id, &client),
+        client_hash
+    );
 
     // Freelancer submits rebuttal evidence
     let freelancer_hash = BytesN::from_array(&env, &[0xbb; 32]);
     escrow_client.submit_dispute_evidence(&job_id, &freelancer, &freelancer_hash);
-    assert_eq!(escrow_client.get_dispute_evidence(&job_id, &freelancer), freelancer_hash);
+    assert_eq!(
+        escrow_client.get_dispute_evidence(&job_id, &freelancer),
+        freelancer_hash
+    );
 
     // Unauthorized non-party fails
     let outsider = Address::generate(&env);
@@ -999,7 +1003,10 @@ fn test_milestone_deadlines_and_overdue_queries() {
     // Setting valid future deadline succeeds
     let target_deadline = base_time + 3600;
     escrow_client.set_milestone_deadline(&job_id, &client, &1, &target_deadline);
-    assert_eq!(escrow_client.get_milestone_deadline(&job_id, &1), Some(target_deadline));
+    assert_eq!(
+        escrow_client.get_milestone_deadline(&job_id, &1),
+        Some(target_deadline)
+    );
     assert_eq!(escrow_client.is_milestone_expired(&job_id, &1), false);
 
     // Advance time past deadline
@@ -1068,11 +1075,17 @@ fn test_cancel_expired_milestone_refund() {
 
     // Cancel expired milestone 1 -> client gets refunded 400_000
     escrow_client.cancel_expired_milestone(&job_id, &client, &1);
-    assert_eq!(token_client.balance(&client), initial_client_balance + 400_000);
+    assert_eq!(
+        token_client.balance(&client),
+        initial_client_balance + 400_000
+    );
 
     // Cannot cancel again
     let double_cancel = escrow_client.try_cancel_expired_milestone(&job_id, &client, &1);
-    assert_eq!(double_cancel, Err(Ok(EscrowError::MilestoneAlreadyApproved)));
+    assert_eq!(
+        double_cancel,
+        Err(Ok(EscrowError::MilestoneAlreadyApproved))
+    );
 }
 
 #[test]
@@ -1116,7 +1129,10 @@ fn test_extend_milestone_deadline() {
     // Initial deadline
     let initial_dl = base_time + 2000;
     escrow_client.set_milestone_deadline(&job_id, &client, &1, &initial_dl);
-    assert_eq!(escrow_client.get_milestone_deadline(&job_id, &1), Some(initial_dl));
+    assert_eq!(
+        escrow_client.get_milestone_deadline(&job_id, &1),
+        Some(initial_dl)
+    );
 
     // Zero seconds extension fails
     let zero_ext = escrow_client.try_extend_milestone_deadline(&job_id, &client, &1, &0);
@@ -1125,7 +1141,10 @@ fn test_extend_milestone_deadline() {
     // Client extends deadline by 1500 seconds
     let new_dl = escrow_client.extend_milestone_deadline(&job_id, &client, &1, &1500);
     assert_eq!(new_dl, initial_dl + 1500);
-    assert_eq!(escrow_client.get_milestone_deadline(&job_id, &1), Some(initial_dl + 1500));
+    assert_eq!(
+        escrow_client.get_milestone_deadline(&job_id, &1),
+        Some(initial_dl + 1500)
+    );
 
     // Non-client cannot extend
     let non_client = Address::generate(&env);
@@ -1176,29 +1195,55 @@ fn test_release_partial_milestone_lifecycle() {
 
     // Initial state: 0 released, 1,000,000 remaining
     assert_eq!(escrow_client.get_milestone_released_amount(&job_id, &1), 0);
-    assert_eq!(escrow_client.get_milestone_remaining_amount(&job_id, &1), 1_000_000);
+    assert_eq!(
+        escrow_client.get_milestone_remaining_amount(&job_id, &1),
+        1_000_000
+    );
 
     // First partial release: 400,000 (fee is 100 bps = 1.0% = 4,000; net 396,000)
-    let remaining_after_first = escrow_client.release_partial_milestone(&job_id, &client, &1, &400_000);
+    let remaining_after_first =
+        escrow_client.release_partial_milestone(&job_id, &client, &1, &400_000);
     assert_eq!(remaining_after_first, 600_000);
-    assert_eq!(escrow_client.get_milestone_released_amount(&job_id, &1), 400_000);
-    assert_eq!(escrow_client.get_milestone_remaining_amount(&job_id, &1), 600_000);
+    assert_eq!(
+        escrow_client.get_milestone_released_amount(&job_id, &1),
+        400_000
+    );
+    assert_eq!(
+        escrow_client.get_milestone_remaining_amount(&job_id, &1),
+        600_000
+    );
 
-    assert_eq!(token_client.balance(&freelancer), initial_freelancer_bal + 396_000);
-    assert_eq!(token_client.balance(&treasury), initial_treasury_bal + 4_000);
+    assert_eq!(
+        token_client.balance(&freelancer),
+        initial_freelancer_bal + 396_000
+    );
+    assert_eq!(
+        token_client.balance(&treasury),
+        initial_treasury_bal + 4_000
+    );
 
     // Attempting to release more than remaining (700,000 > 600,000) fails with InvalidAmount
     let over_release = escrow_client.try_release_partial_milestone(&job_id, &client, &1, &700_000);
     assert_eq!(over_release, Err(Ok(EscrowError::InvalidAmount)));
 
     // Second partial release: remaining 600,000 (fee is 1.0% = 6,000; net 594,000)
-    let remaining_after_second = escrow_client.release_partial_milestone(&job_id, &client, &1, &600_000);
+    let remaining_after_second =
+        escrow_client.release_partial_milestone(&job_id, &client, &1, &600_000);
     assert_eq!(remaining_after_second, 0);
-    assert_eq!(escrow_client.get_milestone_released_amount(&job_id, &1), 1_000_000);
+    assert_eq!(
+        escrow_client.get_milestone_released_amount(&job_id, &1),
+        1_000_000
+    );
     assert_eq!(escrow_client.get_milestone_remaining_amount(&job_id, &1), 0);
 
-    assert_eq!(token_client.balance(&freelancer), initial_freelancer_bal + 396_000 + 594_000);
-    assert_eq!(token_client.balance(&treasury), initial_treasury_bal + 4_000 + 6_000);
+    assert_eq!(
+        token_client.balance(&freelancer),
+        initial_freelancer_bal + 396_000 + 594_000
+    );
+    assert_eq!(
+        token_client.balance(&treasury),
+        initial_treasury_bal + 4_000 + 6_000
+    );
 
     let final_escrow = escrow_client.get_escrow(&job_id);
     assert_eq!(final_escrow.status, EscrowStatus::Completed);
@@ -1265,8 +1310,14 @@ fn test_property_partial_release_sum_conservation() {
     let total_fee = (total_milestone * 100) / 10_000;
     let total_freelancer = total_milestone - total_fee;
 
-    assert_eq!(token_client.balance(&freelancer), initial_freelancer_bal + total_freelancer);
-    assert_eq!(token_client.balance(&treasury), initial_treasury_bal + total_fee);
+    assert_eq!(
+        token_client.balance(&freelancer),
+        initial_freelancer_bal + total_freelancer
+    );
+    assert_eq!(
+        token_client.balance(&treasury),
+        initial_treasury_bal + total_fee
+    );
 }
 
 #[test]
@@ -1599,12 +1650,12 @@ fn test_property_dispute_award_conservation() {
     ) = setup_test(&env);
 
     let test_matrix: [(i128, i128, i128); 6] = [
-        (1_000_000, 1_000_000, 0),         // 100% to client
-        (1_000_000, 0, 1_000_000),         // 100% to freelancer
-        (1_000_000, 500_000, 500_000),     // 50/50 split
-        (1_000_000, 250_000, 750_000),     // 25/75 split
-        (1_000_001, 333_333, 666_668),     // Odd amount with non-zero remainder
-        (9_999_999, 1, 9_999_998),         // Extreme edge split
+        (1_000_000, 1_000_000, 0),     // 100% to client
+        (1_000_000, 0, 1_000_000),     // 100% to freelancer
+        (1_000_000, 500_000, 500_000), // 50/50 split
+        (1_000_000, 250_000, 750_000), // 25/75 split
+        (1_000_001, 333_333, 666_668), // Odd amount with non-zero remainder
+        (9_999_999, 1, 9_999_998),     // Extreme edge split
     ];
 
     for (idx, (total, client_part, freelancer_part)) in test_matrix.iter().enumerate() {
@@ -1684,8 +1735,8 @@ fn test_property_fee_ceiling_and_deduction_bounds() {
         (250, 10_000_000),
         (500, 50_000_000),
         (1000, 100_000_000),
-        (100, 17),        // Small odd amount
-        (1000, 999_999),   // Odd amount with max fee
+        (100, 17),       // Small odd amount
+        (1000, 999_999), // Odd amount with max fee
     ];
 
     for (idx, (fee_bps, amount)) in test_cases.iter().enumerate() {
@@ -1792,21 +1843,45 @@ fn test_property_arbitrator_bond_conservation() {
 
     // 3. Penalty slash Arb A
     let initial_recipient_bal = token_client.balance(&penalty_recipient);
-    escrow_client.slash_arbitrator_bond(&admin, &arb_a, &penalty_recipient, &token_address, &250_000);
+    escrow_client.slash_arbitrator_bond(
+        &admin,
+        &arb_a,
+        &penalty_recipient,
+        &token_address,
+        &250_000,
+    );
     assert_eq!(escrow_client.get_arbitrator_bond(&arb_a), 600_000);
     expected_total_bonds -= 250_000;
     assert_eq!(token_client.balance(&contract_addr), expected_total_bonds);
-    assert_eq!(token_client.balance(&penalty_recipient) - initial_recipient_bal, 250_000);
+    assert_eq!(
+        token_client.balance(&penalty_recipient) - initial_recipient_bal,
+        250_000
+    );
 
     // 4. Penalty slash Arb B
-    escrow_client.slash_arbitrator_bond(&admin, &arb_b, &penalty_recipient, &token_address, &600_000);
+    escrow_client.slash_arbitrator_bond(
+        &admin,
+        &arb_b,
+        &penalty_recipient,
+        &token_address,
+        &600_000,
+    );
     assert_eq!(escrow_client.get_arbitrator_bond(&arb_b), 400_000);
     expected_total_bonds -= 600_000;
     assert_eq!(token_client.balance(&contract_addr), expected_total_bonds);
-    assert_eq!(token_client.balance(&penalty_recipient) - initial_recipient_bal, 850_000);
+    assert_eq!(
+        token_client.balance(&penalty_recipient) - initial_recipient_bal,
+        850_000
+    );
 
     // 5. Excessive slash rejected
-    let excess_res = escrow_client.try_slash_arbitrator_bond(&admin, &arb_c, &penalty_recipient, &token_address, &999_999);
+    let excess_res = escrow_client.try_slash_arbitrator_bond(
+        &admin,
+        &arb_c,
+        &penalty_recipient,
+        &token_address,
+        &999_999,
+    );
     assert_eq!(excess_res, Err(Ok(EscrowError::InsufficientBond)));
     assert_eq!(escrow_client.get_arbitrator_bond(&arb_c), 750_000);
 
@@ -1932,7 +2007,8 @@ fn test_arbitrator_bond_withdrawal() {
     assert_eq!(token_client.balance(&arbitrator), 650_000);
 
     // 3. Excess withdrawal rejected
-    let excess_res = escrow_client.try_withdraw_arbitrator_bond(&arbitrator, &token_address, &500_000);
+    let excess_res =
+        escrow_client.try_withdraw_arbitrator_bond(&arbitrator, &token_address, &500_000);
     assert_eq!(excess_res.err(), Some(Ok(EscrowError::InvalidAmount)));
 
     // 4. Withdraw remaining bond (350,000)
@@ -2035,7 +2111,10 @@ fn test_dispute_cooling_off_enforcement() {
 
     // Attempt premature resolution within 300s cooling-off period
     let premature_res = escrow_client.try_resolve_dispute(&job_id, &arbitrator, &500_000, &500_000);
-    assert_eq!(premature_res.err(), Some(Ok(EscrowError::RateLimitExceeded)));
+    assert_eq!(
+        premature_res.err(),
+        Some(Ok(EscrowError::RateLimitExceeded))
+    );
 
     // Advance ledger timestamp beyond cooldown (301 seconds)
     env.ledger().with_mut(|li| li.timestamp += 301);
@@ -2079,12 +2158,18 @@ fn test_emergency_freeze_notice_period_and_unfreeze() {
 
     // Attempt unfreeze before notice period elapses
     let premature_unfreeze = escrow_client.try_execute_emergency_unfreeze();
-    assert_eq!(premature_unfreeze.err(), Some(Ok(EscrowError::FreezePeriodNotExpired)));
+    assert_eq!(
+        premature_unfreeze.err(),
+        Some(Ok(EscrowError::FreezePeriodNotExpired))
+    );
 
     // Advance halfway through notice period (43,200 seconds)
     env.ledger().with_mut(|li| li.timestamp += 43_200);
     let still_premature = escrow_client.try_execute_emergency_unfreeze();
-    assert_eq!(still_premature.err(), Some(Ok(EscrowError::FreezePeriodNotExpired)));
+    assert_eq!(
+        still_premature.err(),
+        Some(Ok(EscrowError::FreezePeriodNotExpired))
+    );
 
     // Advance beyond notice period (+45,000 seconds)
     env.ledger().with_mut(|li| li.timestamp += 45_000);
@@ -2145,7 +2230,10 @@ fn test_audit_log_counter_and_receipt_verification() {
 
     // Non-existent index returns AuditIndexMismatch
     let non_existent = escrow_client.try_verify_audit_receipt(&999, &hash1);
-    assert_eq!(non_existent.err(), Some(Ok(EscrowError::AuditIndexMismatch)));
+    assert_eq!(
+        non_existent.err(),
+        Some(Ok(EscrowError::AuditIndexMismatch))
+    );
 }
 
 #[test]
@@ -2169,15 +2257,24 @@ fn test_contract_wasm_upgrade_authorization_and_timelock() {
 
     // Non-admin cannot stage upgrade
     let unauthorized_stage = escrow_client.try_stage_upgrade(&client, &dummy_wasm_hash);
-    assert_eq!(unauthorized_stage.err(), Some(Ok(EscrowError::Unauthorized)));
+    assert_eq!(
+        unauthorized_stage.err(),
+        Some(Ok(EscrowError::Unauthorized))
+    );
 
     // Non-admin cannot set upgrade delay
     let unauthorized_delay = escrow_client.try_set_upgrade_delay(&client, &7200);
-    assert_eq!(unauthorized_delay.err(), Some(Ok(EscrowError::Unauthorized)));
+    assert_eq!(
+        unauthorized_delay.err(),
+        Some(Ok(EscrowError::Unauthorized))
+    );
 
     // Delay lower than 3600 seconds rejected
     let invalid_delay = escrow_client.try_set_upgrade_delay(&admin, &1800);
-    assert_eq!(invalid_delay.err(), Some(Ok(EscrowError::InvalidUpgradeDelay)));
+    assert_eq!(
+        invalid_delay.err(),
+        Some(Ok(EscrowError::InvalidUpgradeDelay))
+    );
 
     // Set custom 7200s delay
     escrow_client.set_upgrade_delay(&admin, &7200);
@@ -2196,7 +2293,10 @@ fn test_contract_wasm_upgrade_authorization_and_timelock() {
 
     // Premature execution fails with UpgradeTimelockActive
     let premature_exec = escrow_client.try_execute_upgrade(&admin);
-    assert_eq!(premature_exec.err(), Some(Ok(EscrowError::UpgradeTimelockActive)));
+    assert_eq!(
+        premature_exec.err(),
+        Some(Ok(EscrowError::UpgradeTimelockActive))
+    );
 
     // Cancel staged upgrade
     escrow_client.cancel_staged_upgrade(&admin);
@@ -2204,7 +2304,10 @@ fn test_contract_wasm_upgrade_authorization_and_timelock() {
 
     // Executing when not staged fails with UpgradeNotStaged
     let not_staged_exec = escrow_client.try_execute_upgrade(&admin);
-    assert_eq!(not_staged_exec.err(), Some(Ok(EscrowError::UpgradeNotStaged)));
+    assert_eq!(
+        not_staged_exec.err(),
+        Some(Ok(EscrowError::UpgradeNotStaged))
+    );
 }
 
 #[test]
@@ -2229,7 +2332,8 @@ fn test_governance_proposals_quorum_and_voting() {
     let quorum = 1000;
     let duration = 3600;
 
-    let proposal_id = escrow_client.create_proposal(&admin, &title, &description, &quorum, &duration);
+    let proposal_id =
+        escrow_client.create_proposal(&admin, &title, &description, &quorum, &duration);
     assert_eq!(proposal_id, 1);
 
     let prop = escrow_client.get_proposal(&proposal_id);
@@ -2288,7 +2392,10 @@ fn test_upgrade_staging_and_timelock_window() {
 
     // Advance 50,000s (still within timelock)
     env.ledger().with_mut(|li| li.timestamp += 50_000);
-    assert_eq!(escrow_client.try_execute_upgrade(&admin).err(), Some(Ok(EscrowError::UpgradeTimelockActive)));
+    assert_eq!(
+        escrow_client.try_execute_upgrade(&admin).err(),
+        Some(Ok(EscrowError::UpgradeTimelockActive))
+    );
 
     // Cancel staged upgrade before window expires
     escrow_client.cancel_staged_upgrade(&admin);
@@ -2365,7 +2472,8 @@ fn test_deliverable_caller_authorization_and_party_validation() {
 
     // Unauthorized third-party (arbitrator is not client or freelancer) rejected
     let unauthorized_hash = BytesN::from_array(&env, &[99u8; 32]);
-    let unauthorized_res = escrow_client.try_submit_deliverable_by_party(&job_id, &arbitrator, &unauthorized_hash);
+    let unauthorized_res =
+        escrow_client.try_submit_deliverable_by_party(&job_id, &arbitrator, &unauthorized_hash);
     assert_eq!(unauthorized_res.err(), Some(Ok(EscrowError::Unauthorized)));
 }
 
@@ -2514,13 +2622,20 @@ fn test_milestone_array_maximum_gas_bounds_and_preview_enforced() {
         });
     }
 
-    let overflow_res = escrow_client.try_create_escrow(&job_id, &client, &params, &overflow_milestones);
-    assert_eq!(overflow_res.err(), Some(Ok(EscrowError::InvalidMilestoneCount)));
+    let overflow_res =
+        escrow_client.try_create_escrow(&job_id, &client, &params, &overflow_milestones);
+    assert_eq!(
+        overflow_res.err(),
+        Some(Ok(EscrowError::InvalidMilestoneCount))
+    );
 
     // Empty batch release rejected
     let empty_batch = Vec::new(&env);
     let empty_res = escrow_client.try_batch_release_milestones(&job_id, &client, &empty_batch);
-    assert_eq!(empty_res.err(), Some(Ok(EscrowError::InvalidMilestoneCount)));
+    assert_eq!(
+        empty_res.err(),
+        Some(Ok(EscrowError::InvalidMilestoneCount))
+    );
 
     // Valid escrow with 2 milestones
     let mut valid_milestones = Vec::new(&env);
@@ -2539,7 +2654,8 @@ fn test_milestone_array_maximum_gas_bounds_and_preview_enforced() {
     preview_batch.push_back(1);
     preview_batch.push_back(2);
 
-    let (total_release, fee, net_payout) = escrow_client.preview_batch_release(&job_id, &preview_batch);
+    let (total_release, fee, net_payout) =
+        escrow_client.preview_batch_release(&job_id, &preview_batch);
     assert_eq!(total_release, 1_000_000);
     assert_eq!(total_release, fee + net_payout);
 }
@@ -2592,7 +2708,10 @@ fn test_batch_cancellation_refund_and_authorization() {
     escrow_client.create_escrow(&job2, &client, &params2, &milestones);
 
     // Balance after funding 2 jobs
-    assert_eq!(token_client.balance(&client), initial_balance - (amount_each * 2));
+    assert_eq!(
+        token_client.balance(&client),
+        initial_balance - (amount_each * 2)
+    );
 
     let mut batch_jobs = Vec::new(&env);
     batch_jobs.push_back(job1.clone());

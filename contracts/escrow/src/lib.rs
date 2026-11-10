@@ -1737,6 +1737,10 @@ impl EscrowContract {
             return Err(EscrowError::Unauthorized);
         }
 
+        if let Some(hash) = env.storage().instance().get::<_, BytesN<32>>(&DataKey::StagedUpgradeHash) {
+            EscrowEvents::upgrade_cancelled(&env, admin, hash);
+        }
+
         env.storage().instance().remove(&DataKey::StagedUpgradeHash);
         env.storage().instance().remove(&DataKey::StagedUpgradeUnlock);
         Ok(())

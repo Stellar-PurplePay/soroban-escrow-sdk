@@ -165,6 +165,11 @@ impl EscrowEvents {
             .publish((symbol_short!("upgrade"), symbol_short!("exec")), (admin, new_wasm_hash));
     }
 
+    pub fn upgrade_cancelled(env: &Env, admin: Address, wasm_hash: BytesN<32>) {
+        env.events()
+            .publish((symbol_short!("upgrade"), symbol_short!("cancel")), (admin, wasm_hash));
+    }
+
     pub fn proposal_created(env: &Env, proposal_id: u64, proposer: Address) {
         env.events()
             .publish((symbol_short!("gov"), symbol_short!("create")), (proposal_id, proposer));

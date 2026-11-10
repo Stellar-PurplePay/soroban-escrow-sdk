@@ -461,7 +461,7 @@ fn test_mutual_cancellation_while_in_progress() {
         freelancer,
         arbitrator,
         token_client,
-        _token_admin,
+        token_admin,
         token_address,
         escrow_client,
     ) = setup_test(&env);
@@ -685,7 +685,7 @@ fn test_multi_arbitrator_quorum_voting() {
         freelancer,
         _arbitrator,
         token_client,
-        _token_admin,
+        token_admin,
         token_address,
         escrow_client,
     ) = setup_test(&env);
@@ -1023,7 +1023,7 @@ fn test_cancel_expired_milestone_refund() {
         freelancer,
         arbitrator,
         token_client,
-        _token_admin,
+        token_admin,
         token_address,
         escrow_client,
     ) = setup_test(&env);
@@ -1145,7 +1145,7 @@ fn test_release_partial_milestone_lifecycle() {
         freelancer,
         arbitrator,
         token_client,
-        _token_admin,
+        token_admin,
         token_address,
         escrow_client,
     ) = setup_test(&env);
@@ -1216,7 +1216,7 @@ fn test_property_partial_release_sum_conservation() {
         freelancer,
         arbitrator,
         token_client,
-        _token_admin,
+        token_admin,
         token_address,
         escrow_client,
     ) = setup_test(&env);
@@ -2542,4 +2542,74 @@ fn test_milestone_array_maximum_gas_bounds_and_preview_enforced() {
     let (total_release, fee, net_payout) = escrow_client.preview_batch_release(&job_id, &preview_batch);
     assert_eq!(total_release, 1_000_000);
     assert_eq!(total_release, fee + net_payout);
+}
+
+#[test]
+fn test_batch_cancellation_refund_and_authorization() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        _treasury,
+        client,
+        freelancer,
+        arbitrator,
+        token_client,
+        _token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let initial_balance = token_client.balance(&client);
+    let amount_each = 500_000;
+
+    let job1 = String::from_str(&env, "batch-cancel-job-1");
+    let job2 = String::from_str(&env, "batch-cancel-job-2");
+
+    let params1 = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address.clone(),
+        total_amount: amount_each,
+        timeout_timestamp: env.ledger().timestamp() + 50_000,
+        arbitrator: arbitrator.clone(),
+    };
+    let params2 = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address,
+        total_amount: amount_each,
+        timeout_timestamp: env.ledger().timestamp() + 50_000,
+        arbitrator,
+    };
+
+    let mut milestones = Vec::new(&env);
+    milestones.push_back(MilestoneInput {
+        description: String::from_str(&env, "Phase 1"),
+        percentage: 100,
+    });
+
+    escrow_client.create_escrow(&job1, &client, &params1, &milestones);
+    escrow_client.create_escrow(&job2, &client, &params2, &milestones);
+
+    // Balance after funding 2 jobs
+    assert_eq!(token_client.balance(&client), initial_balance - (amount_each * 2));
+
+    let mut batch_jobs = Vec::new(&env);
+    batch_jobs.push_back(job1.clone());
+    batch_jobs.push_back(job2.clone());
+
+    let refunded = escrow_client.batch_cancel_escrows(&client, &batch_jobs);
+    assert_eq!(refunded, 1_000_000);
+
+    // Client received full refund back
+    assert_eq!(token_client.balance(&client), initial_balance);
+
+    let e1 = escrow_client.get_escrow(&job1);
+    let e2 = escrow_client.get_escrow(&job2);
+    assert_eq!(e1.status, EscrowStatus::Refunded);
+    assert_eq!(e2.status, EscrowStatus::Refunded);
+
+    // Resubmitting batch cancel on already refunded jobs fails with InvalidStatus
+    let resubmit_res = escrow_client.try_batch_cancel_escrows(&client, &batch_jobs);
+    assert_eq!(resubmit_res.err(), Some(Ok(EscrowError::InvalidStatus)));
 }

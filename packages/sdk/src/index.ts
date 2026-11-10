@@ -16,4 +16,5 @@ export * from "./networkMetrics";
 export * from "./eventStreamer";
 export * from "./batchPayment";
 export * from "./auditVerifier";
+export * from "./upgradeManager";
 export * from "./client";

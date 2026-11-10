@@ -2113,4 +2113,61 @@ impl EscrowContract {
 
         Ok((total_release_amount, fee, freelancer_payout))
     }
+
+    /// Gas-optimized batch cancellation: cancels multiple inactive escrows created by the client and refunds deposits.
+    pub fn batch_cancel_escrows(
+        env: Env,
+        client: Address,
+        job_ids: Vec<String>,
+    ) -> Result<i128, EscrowError> {
+        ensure_not_paused(&env)?;
+        client.require_auth();
+
+        if job_ids.is_empty() || job_ids.len() > 10 {
+            return Err(EscrowError::InvalidMilestoneCount);
+        }
+
+        let mut total_refund: i128 = 0;
+
+        for job_id in job_ids.iter() {
+            let escrow_key = DataKey::Escrow(job_id.clone());
+            let mut escrow: Escrow = env
+                .storage()
+                .persistent()
+                .get(&escrow_key)
+                .ok_or(EscrowError::EscrowNotFound)?;
+
+            if escrow.client != client {
+                return Err(EscrowError::Unauthorized);
+            }
+
+            if escrow.status != EscrowStatus::Created {
+                return Err(EscrowError::InvalidStatus);
+            }
+
+            let refund_amount = escrow
+                .total_amount
+                .checked_sub(escrow.released_amount)
+                .ok_or(EscrowError::InvalidAmount)?;
+
+            escrow.status = EscrowStatus::Refunded;
+            env.storage().persistent().set(&escrow_key, &escrow);
+            extend_storage_ttl(&env, &job_id);
+
+            EscrowEvents::escrow_refunded(&env, job_id, refund_amount);
+
+            let token_client = token::Client::new(&env, &escrow.token);
+            token_client.transfer(
+                &env.current_contract_address(),
+                &client,
+                &refund_amount,
+            );
+
+            total_refund = total_refund
+                .checked_add(refund_amount)
+                .ok_or(EscrowError::InvalidAmount)?;
+        }
+
+        Ok(total_refund)
+    }
 }

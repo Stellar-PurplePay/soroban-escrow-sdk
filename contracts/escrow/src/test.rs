@@ -2613,3 +2613,33 @@ fn test_batch_cancellation_refund_and_authorization() {
     let resubmit_res = escrow_client.try_batch_cancel_escrows(&client, &batch_jobs);
     assert_eq!(resubmit_res.err(), Some(Ok(EscrowError::InvalidStatus)));
 }
+
+#[test]
+fn test_get_contract_info_aggregation() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        admin,
+        treasury,
+        _client,
+        _freelancer,
+        _arbitrator,
+        _token_client,
+        _token_admin,
+        _token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let info = escrow_client.get_contract_info();
+    assert_eq!(info.admin, admin);
+    assert_eq!(info.treasury, treasury);
+    assert_eq!(info.fee_bps, 100);
+    assert_eq!(info.is_paused, false);
+    assert_eq!(info.receipt_counter, 0);
+
+    // Pause the contract and verify is_paused updates in info
+    escrow_client.pause();
+    let paused_info = escrow_client.get_contract_info();
+    assert_eq!(paused_info.is_paused, true);
+}

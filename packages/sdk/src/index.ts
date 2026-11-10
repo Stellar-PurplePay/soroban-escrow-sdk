@@ -18,4 +18,5 @@ export * from "./batchPayment";
 export * from "./auditVerifier";
 export * from "./upgradeManager";
 export * from "./sep10Client";
+export * from "./profiler";
 export * from "./client";

@@ -2475,3 +2475,71 @@ fn test_batch_release_milestones_consolidated_settlement() {
     assert_eq!(escrow_final.released_amount, total);
     assert_eq!(escrow_final.status, EscrowStatus::Completed);
 }
+
+#[test]
+fn test_milestone_array_maximum_gas_bounds_and_preview_enforced() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        _treasury,
+        client,
+        freelancer,
+        arbitrator,
+        _token_client,
+        token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let total = 1_000_000;
+    token_admin.mint(&client, &total);
+
+    let job_id = String::from_str(&env, "bounds-preview-job");
+    let params = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address,
+        total_amount: total,
+        timeout_timestamp: env.ledger().timestamp() + 50_000,
+        arbitrator,
+    };
+
+    // Construct 26 milestones (> MAX_MILESTONES 25)
+    let mut overflow_milestones = Vec::new(&env);
+    for _ in 0..26 {
+        overflow_milestones.push_back(MilestoneInput {
+            description: String::from_str(&env, "M"),
+            percentage: 3,
+        });
+    }
+
+    let overflow_res = escrow_client.try_create_escrow(&job_id, &client, &params, &overflow_milestones);
+    assert_eq!(overflow_res.err(), Some(Ok(EscrowError::InvalidMilestoneCount)));
+
+    // Empty batch release rejected
+    let empty_batch = Vec::new(&env);
+    let empty_res = escrow_client.try_batch_release_milestones(&job_id, &client, &empty_batch);
+    assert_eq!(empty_res.err(), Some(Ok(EscrowError::InvalidMilestoneCount)));
+
+    // Valid escrow with 2 milestones
+    let mut valid_milestones = Vec::new(&env);
+    valid_milestones.push_back(MilestoneInput {
+        description: String::from_str(&env, "M1"),
+        percentage: 40,
+    });
+    valid_milestones.push_back(MilestoneInput {
+        description: String::from_str(&env, "M2"),
+        percentage: 60,
+    });
+    escrow_client.create_escrow(&job_id, &client, &params, &valid_milestones);
+
+    // Preview batch release
+    let mut preview_batch = Vec::new(&env);
+    preview_batch.push_back(1);
+    preview_batch.push_back(2);
+
+    let (total_release, fee, net_payout) = escrow_client.preview_batch_release(&job_id, &preview_batch);
+    assert_eq!(total_release, 1_000_000);
+    assert_eq!(total_release, fee + net_payout);
+}

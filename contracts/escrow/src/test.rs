@@ -2407,3 +2407,71 @@ fn test_anti_replay_account_nonce_guard() {
     assert_eq!(n2, 2);
     assert_eq!(escrow_client.get_account_nonce(&client), 2);
 }
+
+#[test]
+fn test_batch_release_milestones_consolidated_settlement() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        _treasury,
+        client,
+        freelancer,
+        arbitrator,
+        _token_client,
+        token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let total = 1_000_000;
+    token_admin.mint(&client, &total);
+
+    let job_id = String::from_str(&env, "batch-release-job");
+    let params = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address,
+        total_amount: total,
+        timeout_timestamp: env.ledger().timestamp() + 50_000,
+        arbitrator,
+    };
+
+    let mut milestones = Vec::new(&env);
+    milestones.push_back(MilestoneInput {
+        description: String::from_str(&env, "Milestone 1"),
+        percentage: 30,
+    });
+    milestones.push_back(MilestoneInput {
+        description: String::from_str(&env, "Milestone 2"),
+        percentage: 30,
+    });
+    milestones.push_back(MilestoneInput {
+        description: String::from_str(&env, "Milestone 3"),
+        percentage: 40,
+    });
+
+    escrow_client.create_escrow(&job_id, &client, &params, &milestones);
+    escrow_client.start_work(&job_id, &freelancer);
+
+    let mut batch1 = Vec::new(&env);
+    batch1.push_back(1);
+    batch1.push_back(2);
+
+    let released1 = escrow_client.batch_release_milestones(&job_id, &client, &batch1);
+    assert_eq!(released1, 600_000);
+
+    let escrow_mid = escrow_client.get_escrow(&job_id);
+    assert_eq!(escrow_mid.released_amount, 600_000);
+    assert_eq!(escrow_mid.status, EscrowStatus::InProgress);
+
+    // Release remaining milestone 3
+    let mut batch2 = Vec::new(&env);
+    batch2.push_back(3);
+    let released2 = escrow_client.batch_release_milestones(&job_id, &client, &batch2);
+    assert_eq!(released2, 400_000);
+
+    let escrow_final = escrow_client.get_escrow(&job_id);
+    assert_eq!(escrow_final.released_amount, total);
+    assert_eq!(escrow_final.status, EscrowStatus::Completed);
+}

@@ -1950,4 +1950,118 @@ impl EscrowContract {
             .set(&DataKey::AccountNonce(account), &expected_nonce);
         Ok(expected_nonce)
     }
+
+    /// Gas-optimized batch release: approves multiple milestones in a single transaction with consolidated token settlement.
+    pub fn batch_release_milestones(
+        env: Env,
+        job_id: String,
+        client: Address,
+        milestone_ids: Vec<u32>,
+    ) -> Result<i128, EscrowError> {
+        ensure_not_paused(&env)?;
+        client.require_auth();
+
+        if milestone_ids.is_empty() || milestone_ids.len() > MAX_MILESTONES {
+            return Err(EscrowError::InvalidMilestoneCount);
+        }
+
+        let escrow_key = DataKey::Escrow(job_id.clone());
+        let mut escrow: Escrow = env
+            .storage()
+            .persistent()
+            .get(&escrow_key)
+            .ok_or(EscrowError::EscrowNotFound)?;
+
+        if escrow.client != client {
+            return Err(EscrowError::Unauthorized);
+        }
+
+        if escrow.status != EscrowStatus::InProgress && escrow.status != EscrowStatus::Created {
+            return Err(EscrowError::InvalidStatus);
+        }
+
+        let milestones_key = DataKey::Milestones(job_id.clone());
+        let milestones: Vec<Milestone> = env
+            .storage()
+            .persistent()
+            .get(&milestones_key)
+            .ok_or(EscrowError::EscrowNotFound)?;
+
+        let mut total_release_amount: i128 = 0;
+        let mut updated_milestones: Vec<Milestone> = Vec::new(&env);
+        let mut all_completed = true;
+
+        for mut m in milestones.iter() {
+            let mut should_approve = false;
+            for target_id in milestone_ids.iter() {
+                if m.id == target_id {
+                    should_approve = true;
+                    break;
+                }
+            }
+
+            if should_approve {
+                if m.approved {
+                    return Err(EscrowError::MilestoneAlreadyApproved);
+                }
+                m.approved = true;
+                total_release_amount = total_release_amount
+                    .checked_add(m.amount)
+                    .ok_or(EscrowError::InvalidAmount)?;
+                EscrowEvents::milestone_released(&env, job_id.clone(), m.id, m.amount);
+            }
+
+            if !m.approved {
+                all_completed = false;
+            }
+            updated_milestones.push_back(m);
+        }
+
+        if total_release_amount == 0 {
+            return Err(EscrowError::MilestoneNotFound);
+        }
+
+        // Checks & Effects: CEI pattern
+        escrow.released_amount += total_release_amount;
+        if all_completed || escrow.released_amount >= escrow.total_amount {
+            escrow.status = EscrowStatus::Completed;
+        } else {
+            escrow.status = EscrowStatus::InProgress;
+        }
+
+        env.storage().persistent().set(&escrow_key, &escrow);
+        env.storage()
+            .persistent()
+            .set(&milestones_key, &updated_milestones);
+        extend_storage_ttl(&env, &job_id);
+
+        // Interactions: Single consolidated token settlement
+        let fee_bps: u32 = env.storage().instance().get(&DataKey::FeeBps).unwrap_or(0);
+        let treasury: Option<Address> = env.storage().instance().get(&DataKey::Treasury);
+
+        let fee = total_release_amount
+            .checked_mul(fee_bps as i128)
+            .ok_or(EscrowError::InvalidAmount)?
+            .checked_div(10_000)
+            .ok_or(EscrowError::InvalidAmount)?;
+        let freelancer_payout = total_release_amount
+            .checked_sub(fee)
+            .ok_or(EscrowError::InvalidAmount)?;
+
+        let token_client = token::Client::new(&env, &escrow.token);
+
+        if fee > 0 {
+            if let Some(treasury_addr) = treasury {
+                token_client.transfer(&env.current_contract_address(), &treasury_addr, &fee);
+            }
+        }
+
+        token_client.transfer(
+            &env.current_contract_address(),
+            &escrow.freelancer,
+            &freelancer_payout,
+        );
+
+        Ok(total_release_amount)
+    }
 }

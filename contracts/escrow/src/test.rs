@@ -2260,3 +2260,37 @@ fn test_governance_proposals_quorum_and_voting() {
     let late_vote = escrow_client.try_vote_proposal(&proposal_id, &arbitrator, &false, &400);
     assert_eq!(late_vote.err(), Some(Ok(EscrowError::ProposalExpired)));
 }
+
+#[test]
+fn test_upgrade_staging_and_timelock_window() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        admin,
+        _treasury,
+        _client,
+        _freelancer,
+        _arbitrator,
+        _token_client,
+        _token_admin,
+        _token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    // Initial default delay is 86,400s (24 hours)
+    assert_eq!(escrow_client.get_upgrade_delay(), 86_400);
+
+    let wasm_hash = BytesN::from_array(&env, &[77u8; 32]);
+    let t0 = env.ledger().timestamp();
+    let unlock_ts = escrow_client.stage_upgrade(&admin, &wasm_hash);
+    assert_eq!(unlock_ts, t0 + 86_400);
+
+    // Advance 50,000s (still within timelock)
+    env.ledger().with_mut(|li| li.timestamp += 50_000);
+    assert_eq!(escrow_client.try_execute_upgrade(&admin).err(), Some(Ok(EscrowError::UpgradeTimelockActive)));
+
+    // Cancel staged upgrade before window expires
+    escrow_client.cancel_staged_upgrade(&admin);
+    assert!(escrow_client.get_staged_upgrade().is_none());
+}

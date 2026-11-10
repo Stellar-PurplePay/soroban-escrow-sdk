@@ -18,6 +18,8 @@ pub use types::*;
 pub const MAX_FEE_BPS: u32 = 1_000;
 /// Maximum supported milestones per escrow to ensure bounded gas execution
 pub const MAX_MILESTONES: u32 = 25;
+/// Semantic version tag of the Soroban Escrow contract release
+pub const CONTRACT_VERSION: &str = "1.0.0";
 
 fn validate_fee(fee_bps: u32) -> Result<(), EscrowError> {
     if fee_bps > MAX_FEE_BPS {
@@ -2202,5 +2204,10 @@ impl EscrowContract {
             is_paused,
             receipt_counter,
         })
+    }
+
+    /// Returns the semantic release version of the contract ("1.0.0").
+    pub fn get_contract_version(env: Env) -> String {
+        String::from_str(&env, CONTRACT_VERSION)
     }
 }

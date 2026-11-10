@@ -2322,3 +2322,88 @@ fn test_upgrade_events_emitted_with_correct_topics() {
     escrow_client.cancel_staged_upgrade(&admin);
     assert_eq!(escrow_client.get_staged_upgrade(), None);
 }
+
+#[test]
+fn test_deliverable_caller_authorization_and_party_validation() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        _treasury,
+        client,
+        freelancer,
+        arbitrator,
+        _token_client,
+        _token_admin,
+        token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let job_id = String::from_str(&env, "auth-deliverable-job");
+    let params = CreateEscrowParams {
+        freelancer: freelancer.clone(),
+        token: token_address,
+        total_amount: 1_000_000,
+        timeout_timestamp: env.ledger().timestamp() + 50_000,
+        arbitrator: arbitrator.clone(),
+    };
+
+    let milestones = Vec::new(&env);
+    escrow_client.create_escrow(&job_id, &client, &params, &milestones);
+
+    let deliv_hash = BytesN::from_array(&env, &[42u8; 32]);
+
+    // Authorized freelancer submission succeeds
+    escrow_client.submit_deliverable_by_party(&job_id, &freelancer, &deliv_hash);
+    assert_eq!(escrow_client.get_deliverable(&job_id), deliv_hash.clone());
+
+    // Authorized client submission succeeds
+    let client_hash = BytesN::from_array(&env, &[43u8; 32]);
+    escrow_client.submit_deliverable_by_party(&job_id, &client, &client_hash);
+    assert_eq!(escrow_client.get_deliverable(&job_id), client_hash);
+
+    // Unauthorized third-party (arbitrator is not client or freelancer) rejected
+    let unauthorized_hash = BytesN::from_array(&env, &[99u8; 32]);
+    let unauthorized_res = escrow_client.try_submit_deliverable_by_party(&job_id, &arbitrator, &unauthorized_hash);
+    assert_eq!(unauthorized_res.err(), Some(Ok(EscrowError::Unauthorized)));
+}
+
+#[test]
+fn test_anti_replay_account_nonce_guard() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        _admin,
+        _treasury,
+        client,
+        _freelancer,
+        _arbitrator,
+        _token_client,
+        _token_admin,
+        _token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    // Initial nonce is 0
+    assert_eq!(escrow_client.get_account_nonce(&client), 0);
+
+    // Valid next sequential nonce: 1
+    let n1 = escrow_client.verify_and_increment_nonce(&client, &1);
+    assert_eq!(n1, 1);
+    assert_eq!(escrow_client.get_account_nonce(&client), 1);
+
+    // Replay attack: resubmitting nonce 1 fails
+    let replay_res = escrow_client.try_verify_and_increment_nonce(&client, &1);
+    assert_eq!(replay_res.err(), Some(Ok(EscrowError::InvalidNonce)));
+
+    // Out-of-order jump: skipping to nonce 5 fails
+    let jump_res = escrow_client.try_verify_and_increment_nonce(&client, &5);
+    assert_eq!(jump_res.err(), Some(Ok(EscrowError::InvalidNonce)));
+
+    // Valid sequential nonce: 2
+    let n2 = escrow_client.verify_and_increment_nonce(&client, &2);
+    assert_eq!(n2, 2);
+    assert_eq!(escrow_client.get_account_nonce(&client), 2);
+}

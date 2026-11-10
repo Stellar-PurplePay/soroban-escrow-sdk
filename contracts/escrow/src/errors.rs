@@ -40,4 +40,5 @@ pub enum EscrowError {
     ProposalNotFound = 34,
     ProposalAlreadyVoted = 35,
     ProposalExpired = 36,
+    InvalidNonce = 37,
 }

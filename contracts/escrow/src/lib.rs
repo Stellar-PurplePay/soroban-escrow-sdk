@@ -1891,4 +1891,63 @@ impl EscrowContract {
         let passed = quorum_met && (proposal.votes_for > proposal.votes_against);
         Ok(passed)
     }
+
+    /// Submit deliverable hash verifying that the caller is an authorized party of the escrow (freelancer or client).
+    pub fn submit_deliverable_by_party(
+        env: Env,
+        job_id: String,
+        caller: Address,
+        deliverable_hash: BytesN<32>,
+    ) -> Result<(), EscrowError> {
+        ensure_not_paused(&env)?;
+        caller.require_auth();
+
+        let escrow_key = DataKey::Escrow(job_id.clone());
+        let escrow: Escrow = env
+            .storage()
+            .persistent()
+            .get(&escrow_key)
+            .ok_or(EscrowError::EscrowNotFound)?;
+
+        if caller != escrow.freelancer && caller != escrow.client {
+            return Err(EscrowError::Unauthorized);
+        }
+
+        if escrow.status != EscrowStatus::InProgress && escrow.status != EscrowStatus::Created {
+            return Err(EscrowError::InvalidStatus);
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Deliverable(job_id.clone()), &deliverable_hash);
+
+        extend_storage_ttl(&env, &job_id);
+        EscrowEvents::deliverable_submitted(&env, job_id, deliverable_hash);
+        Ok(())
+    }
+
+    /// Query the current replay protection nonce for an account.
+    pub fn get_account_nonce(env: Env, account: Address) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::AccountNonce(account))
+            .unwrap_or(0)
+    }
+
+    /// Verifies and increments the anti-replay nonce for an account (must be strictly expected_nonce = current + 1).
+    pub fn verify_and_increment_nonce(
+        env: Env,
+        account: Address,
+        expected_nonce: u64,
+    ) -> Result<u64, EscrowError> {
+        account.require_auth();
+        let current = Self::get_account_nonce(env.clone(), account.clone());
+        if expected_nonce != current + 1 {
+            return Err(EscrowError::InvalidNonce);
+        }
+        env.storage()
+            .instance()
+            .set(&DataKey::AccountNonce(account), &expected_nonce);
+        Ok(expected_nonce)
+    }
 }

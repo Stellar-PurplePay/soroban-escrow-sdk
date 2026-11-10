@@ -113,4 +113,5 @@ pub enum DataKey {
     ProposalCount,
     Proposal(u64),
     ProposalVote(u64, Address),
+    AccountNonce(Address),
 }

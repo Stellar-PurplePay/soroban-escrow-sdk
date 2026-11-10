@@ -2643,3 +2643,13 @@ fn test_get_contract_info_aggregation() {
     let paused_info = escrow_client.get_contract_info();
     assert_eq!(paused_info.is_paused, true);
 }
+
+#[test]
+fn test_get_contract_version_semver() {
+    let env = Env::default();
+    let contract_id = env.register(EscrowContract, ());
+    let escrow_client = EscrowContractClient::new(&env, &contract_id);
+
+    let version = escrow_client.get_contract_version();
+    assert_eq!(version, String::from_str(&env, "1.0.0"));
+}

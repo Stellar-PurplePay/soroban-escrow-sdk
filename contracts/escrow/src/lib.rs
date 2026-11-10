@@ -2064,4 +2064,53 @@ impl EscrowContract {
 
         Ok(total_release_amount)
     }
+
+    /// Read-only preview method calculating consolidated settlement totals and fees before release.
+    pub fn preview_batch_release(
+        env: Env,
+        job_id: String,
+        milestone_ids: Vec<u32>,
+    ) -> Result<(i128, i128, i128), EscrowError> {
+        if milestone_ids.is_empty() || milestone_ids.len() > MAX_MILESTONES {
+            return Err(EscrowError::InvalidMilestoneCount);
+        }
+
+        let milestones_key = DataKey::Milestones(job_id);
+        let milestones: Vec<Milestone> = env
+            .storage()
+            .persistent()
+            .get(&milestones_key)
+            .ok_or(EscrowError::EscrowNotFound)?;
+
+        let mut total_release_amount: i128 = 0;
+        for m in milestones.iter() {
+            for target_id in milestone_ids.iter() {
+                if m.id == target_id {
+                    if m.approved {
+                        return Err(EscrowError::MilestoneAlreadyApproved);
+                    }
+                    total_release_amount = total_release_amount
+                        .checked_add(m.amount)
+                        .ok_or(EscrowError::InvalidAmount)?;
+                    break;
+                }
+            }
+        }
+
+        if total_release_amount == 0 {
+            return Err(EscrowError::MilestoneNotFound);
+        }
+
+        let fee_bps: u32 = env.storage().instance().get(&DataKey::FeeBps).unwrap_or(0);
+        let fee = total_release_amount
+            .checked_mul(fee_bps as i128)
+            .ok_or(EscrowError::InvalidAmount)?
+            .checked_div(10_000)
+            .ok_or(EscrowError::InvalidAmount)?;
+        let freelancer_payout = total_release_amount
+            .checked_sub(fee)
+            .ok_or(EscrowError::InvalidAmount)?;
+
+        Ok((total_release_amount, fee, freelancer_payout))
+    }
 }

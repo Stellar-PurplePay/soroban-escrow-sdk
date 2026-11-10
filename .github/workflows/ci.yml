@@ -39,14 +39,17 @@ jobs:
         working-directory: contracts/escrow
 
   sdk:
-    name: TypeScript SDK
+    name: TypeScript SDK (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20]
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ matrix.node-version }}
           cache: 'npm'
           cache-dependency-path: 'package-lock.json'
 
@@ -58,3 +61,6 @@ jobs:
 
       - name: Run SDK Tests
         run: npm run test:sdk
+
+      - name: Dependency Audit
+        run: npm audit --omit=dev --audit-level=critical

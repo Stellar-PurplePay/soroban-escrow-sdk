@@ -20,4 +20,5 @@ export * from "./upgradeManager";
 export * from "./sep10Client";
 export * from "./profiler";
 export * from "./mockRpcServer";
+export * from "./networkConfig";
 export * from "./client";

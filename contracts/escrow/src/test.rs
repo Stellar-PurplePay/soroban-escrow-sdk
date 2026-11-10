@@ -2294,3 +2294,31 @@ fn test_upgrade_staging_and_timelock_window() {
     escrow_client.cancel_staged_upgrade(&admin);
     assert!(escrow_client.get_staged_upgrade().is_none());
 }
+
+#[test]
+fn test_upgrade_events_emitted_with_correct_topics() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (
+        admin,
+        _treasury,
+        _client,
+        _freelancer,
+        _arbitrator,
+        _token_client,
+        _token_admin,
+        _token_address,
+        escrow_client,
+    ) = setup_test(&env);
+
+    let wasm_hash = BytesN::from_array(&env, &[88u8; 32]);
+    let unlock_ts = escrow_client.stage_upgrade(&admin, &wasm_hash);
+    assert!(unlock_ts > env.ledger().timestamp());
+
+    let staged = escrow_client.get_staged_upgrade();
+    assert_eq!(staged, Some((wasm_hash.clone(), unlock_ts)));
+
+    escrow_client.cancel_staged_upgrade(&admin);
+    assert_eq!(escrow_client.get_staged_upgrade(), None);
+}
